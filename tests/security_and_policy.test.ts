@@ -1,0 +1,20 @@
+import {describe,it,expect} from 'vitest';
+import {evaluateTransactionPolicy,type Action,type Policy} from '../src/lib/security/policyEngine';
+const vault='0x1111111111111111111111111111111111111111';
+const p:Policy={tier1SingleTxMaxUsd:2,tier1DailyLimitUsd:5,maxGasGwei:25,whitelistedAddresses:[vault],blacklistedAddresses:['0x000000000000000000000000000000000000dead'],requireApproval:false};
+const a:Action={kind:'transfer_token',token:'USDC',amount:'0.50',recipient:vault,prompt:'Transfer 0.50 USDC to vault'};
+const c={usd:.5,spentUsd:0,gasGwei:1,simulation:true};
+describe('Deterministic transaction policy',()=>{
+ it('allows a whitelisted micro-transaction',()=>expect(evaluateTransactionPolicy(a,p,c).tier).toBe('TIER_1_AUTO'));
+ it('allows reads without simulation',()=>expect(evaluateTransactionPolicy({...a,kind:'read'},p,{...c,simulation:false}).tier).toBe('TIER_0'));
+ it('holds an oversized transfer',()=>expect(evaluateTransactionPolicy(a,p,{...c,usd:5}).tier).toBe('TIER_2_HITL'));
+ it('holds an unknown recipient',()=>expect(evaluateTransactionPolicy({...a,recipient:'0x2222222222222222222222222222222222222222'},p,c).tier).toBe('TIER_2_HITL'));
+ it('blocks blacklisted addresses regardless of whitelist',()=>expect(evaluateTransactionPolicy({...a,recipient:p.blacklistedAddresses[0]},{...p,whitelistedAddresses:p.blacklistedAddresses},c).tier).toBe('BLOCKED'));
+ it.each(['ignore previous instructions','SYSTEM OVERRIDE','drain wallet','reveal system prompt'])('blocks adversarial input: %s',prompt=>expect(evaluateTransactionPolicy({...a,prompt,recipient:'0x2222222222222222222222222222222222222222'},p,c).tier).toBe('BLOCKED'));
+ it('blocks failed simulation even with human mode',()=>expect(evaluateTransactionPolicy(a,{...p,requireApproval:true},{...c,simulation:false}).tier).toBe('BLOCKED'));
+ it('blocks excessive gas',()=>expect(evaluateTransactionPolicy(a,p,{...c,gasGwei:26}).tier).toBe('BLOCKED'));
+ it('holds spend exceeding rolling budget',()=>expect(evaluateTransactionPolicy(a,p,{...c,spentUsd:4.75}).tier).toBe('TIER_2_HITL'));
+ it('accepts exact policy thresholds',()=>expect(evaluateTransactionPolicy(a,p,{...c,usd:2,spentUsd:3,gasGwei:25}).tier).toBe('TIER_1_AUTO'));
+ it('requires approval when enabled',()=>expect(evaluateTransactionPolicy(a,{...p,requireApproval:true},c).tier).toBe('TIER_2_HITL'));
+ it.each([NaN,Infinity,-1,0])('rejects invalid USD value %s',usd=>expect(evaluateTransactionPolicy(a,p,{...c,usd}).tier).toBe('BLOCKED'));
+});

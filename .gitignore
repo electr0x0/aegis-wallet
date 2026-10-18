@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.next-verify/
+.env*
+!.env.example
+data/*.json
+!data/policy.json
+*.tsbuildinfo
+
+# Local project instructions (not published).
+/INIT_INSTRUCTIONS.md
+/GODUI.md
