@@ -2,10 +2,12 @@
 
 Local operator dashboard for a server-signed Base Sepolia wallet. Next.js 15, TypeScript, Tailwind v4, GodUI and GodUI Lab, Lucide, viem and a persistent JSON ledger.
 
+Use pnpm throughout this project. `packageManager` pins pnpm 11.25.0; `pnpm-lock.yaml` is the only dependency lockfile. Use `pnpm install --frozen-lockfile` for reproducible installs.
+
 ```powershell
-npm install
-npm run setup-wallets
-npm run dev
+pnpm install
+pnpm setup-wallets
+pnpm dev
 ```
 
 Open http://127.0.0.1:3000. The setup command creates `.env.local` without printing the signing key. Fund the printed **agent address** with Base Sepolia ETH and USDC, then rerun setup to execute two real evidence transactions. It preserves existing configuration and avoids repeating recorded setup operations. No fake balances or transaction hashes are generated. The generated vault key is retained as `VAULT_PRIVATE_KEY` in `.env.local`; the application signs only with the agent key. You can instead configure your own `VAULT_ADDRESS`.
@@ -13,10 +15,10 @@ Open http://127.0.0.1:3000. The setup command creates `.env.local` without print
 Optional configuration: `BASE_SEPOLIA_RPC_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`. Demo prompts work without an LLM. Other requests use a bounded server-side tool-calling planner when configured. ETH is valued at a disclosed fixed $2,500 reference; this is not a live price oracle. No exchange swaps or slippage-bearing routes are implemented; wrapping uses canonical 1:1 WETH.
 
 ```powershell
-npm test
-npm run typecheck
-npm run build
-npm start
+pnpm test
+pnpm typecheck
+pnpm build
+pnpm start
 ```
 
 The service binds to loopback and accepts only local, same-origin mutations. It is a single-operator, single-Node-process prototype. Do not expose it through a public proxy or launch multiple writers against the ledger. Restart the dev server after editing environment variables. Back up `data/audit_log.json` and `.env.local` privately. Neither is committed.
@@ -27,4 +29,4 @@ Deliverables: [architecture](docs/01_TECHNICAL_DOCUMENTATION.md), [security asse
 
 ## GodUI design system
 
-The dashboard uses official GodUI and GodUI Lab source components. Workspace MCP configuration, component mapping, installation commands, and local adaptations are documented in [GodUI integration](docs/GODUI_INTEGRATION.md). Run `npm run godui:check` to verify the installed MCP server.
+The dashboard uses official GodUI and GodUI Lab source components. Workspace MCP configuration, component mapping, installation commands, and local adaptations are documented in [GodUI integration](docs/GODUI_INTEGRATION.md). Run `pnpm godui:check` to verify the installed MCP server.

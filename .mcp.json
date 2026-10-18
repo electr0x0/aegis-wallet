@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "godui": {
-      "command": "npx",
-      "args": ["-y", "@godui/mcp@0.1.0"]
+      "command": "pnpm",
+      "args": [
+        "dlx",
+        "@godui/mcp@0.1.0"
+      ]
     }
   }
 }

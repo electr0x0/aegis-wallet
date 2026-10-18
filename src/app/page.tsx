@@ -269,7 +269,7 @@ export default function Home() {
                   <b>Wallet connection needs attention</b>
                   <p>{snapshot.error}</p>
                 </div>
-                <code>npm run setup-wallets</code>
+                <code>pnpm setup-wallets</code>
               </div>
             )}
             {notice && (

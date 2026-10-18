@@ -44,7 +44,5 @@
     "typescript": "^5.7.0",
     "vitest": "^5.0.5"
   },
-  "overrides": {
-    "postcss": "^8.5.31"
-  }
+  "packageManager": "pnpm@11.25.0"
 }

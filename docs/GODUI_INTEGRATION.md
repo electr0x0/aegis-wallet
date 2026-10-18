@@ -8,12 +8,12 @@ This workspace follows the [GodUI installation guide](https://godui.design/docs/
 - `.mcp.json` supplies the equivalent portable project configuration for compatible MCP clients.
 - The same exact server package is a development dependency, locked in `package-lock.json`.
 - `codex mcp get godui --json` confirms the project server is enabled. Reload the Codex MCP connection or reopen the project to make newly registered tools available to a new agent session.
-- `npm run godui:check` independently connects to the installed server over MCP stdio and lists its tools. It does not load `.env.local` or transmit wallet configuration.
+- `pnpm godui:check` independently connects to the installed server over MCP stdio and lists its tools. It does not load `.env.local` or transmit wallet configuration.
 
 Verified tools: `list_components`, `search_components`, and `get_component`. The live catalog was queried for AI components, and Number Ticker's full source was retrieved through `get_component`.
 
 ```powershell
-npm run godui:check
+pnpm godui:check
 node scripts/godui-mcp.mjs list_components '{"category":"AI"}'
 node scripts/godui-mcp.mjs get_component '{"name":"number-ticker"}'
 ```
@@ -31,7 +31,7 @@ Codex project MCP configuration follows the [official project configuration docu
 }
 ```
 
-Future additions use `npx shadcn@4.22.1 add @godui/<name>` or `npx shadcn@4.22.1 add @godui-lab/<name>`. The one-time shadcn installer was removed from application dependencies after installation. Review registry updates before overwriting local adaptations.
+Future additions use `pnpm dlx shadcn@4.22.1 add @godui/<name>` or `pnpm dlx shadcn@4.22.1 add @godui-lab/<name>`. The one-time shadcn installer was removed from application dependencies after installation. Review registry updates before overwriting local adaptations.
 
 ## Component map
 
@@ -72,6 +72,6 @@ Application icons use per-icon imports from `@svg-animated-icons/react` ([librar
 
 ## Validation
 
-For a production check alongside a running development server, set `AEGIS_BUILD_DIR=.next-verify` before `npm run build` to isolate Next.js output. The default output directory remains `.next`.
+For a production check alongside a running development server, set `AEGIS_BUILD_DIR=.next-verify` before `pnpm build` to isolate Next.js output. The default output directory remains `.next`.
 
-Run `npm test`, `npm run typecheck`, and `npm run build`. The 32-test suite includes policy, execution concurrency, local API access, approval review/cancellation/confirmation, and text-only composer behavior. Browser checks cover the desktop and narrow layouts, tabs, live metrics, policy controls, and blocked-request audit rendering. Live portfolio reads and blocked security scenarios can be exercised without funding; live approval/broadcast requires funded Base Sepolia assets.
+Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. The 32-test suite includes policy, execution concurrency, local API access, approval review/cancellation/confirmation, and text-only composer behavior. Browser checks cover the desktop and narrow layouts, tabs, live metrics, policy controls, and blocked-request audit rendering. Live portfolio reads and blocked security scenarios can be exercised without funding; live approval/broadcast requires funded Base Sepolia assets.

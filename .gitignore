@@ -6,6 +6,7 @@ node_modules/
 data/*.json
 !data/policy.json
 *.tsbuildinfo
+/package-lock.json
 
 # Local project instructions (not published).
 /INIT_INSTRUCTIONS.md
