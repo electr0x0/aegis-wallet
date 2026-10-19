@@ -392,7 +392,7 @@ pnpm dev               # http://127.0.0.1:3000
 
 - **Restart** `pnpm dev` after changing `.env.local`.
 
-Verification commands: `pnpm test`, `pnpm typecheck`, `pnpm build`. Live evidence requires a funded wallet. An unfunded checkout produces no transaction hashes, and the dashboard shows none.
+Verification commands: `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm attacks` for the offline attack suite. Two read-only checks need no keys: `pnpm guard:verify` publishes the AgentGuard source to Sourcify (the deployed guard is verified there and on Blockscout), and `pnpm verify:evidence <file>` independently re-checks a ledger or evidence export (hash chain, EIP-191 signatures, and each receipt on Base Sepolia). Live evidence requires a funded wallet. An unfunded checkout produces no transaction hashes, and the dashboard shows none.
 
 ## 10. Limitations
 
