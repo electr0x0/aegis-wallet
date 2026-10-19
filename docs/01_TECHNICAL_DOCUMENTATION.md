@@ -374,4 +374,4 @@ Verification commands: `pnpm test`, `pnpm typecheck`, `pnpm build`. Live evidenc
 
 ## 10. Limitations
 
-The prototype is testnet-only, single-process and single-operator. It values assets at a fixed reference price with floating-point USD arithmetic. The off-chain budget is a rolling 24 hours, while the on-chain limits use UTC calendar days. The owner key sits on the same server as the agent key. The full risk matrix and mitigations are in [05](05_SECURITY_SELF_ASSESSMENT.md#3-known-risk-matrix).
+The prototype is testnet-only, single-process and single-operator. It values assets at a fixed reference price with floating-point USD arithmetic. The off-chain budget is a rolling 24 hours, while the on-chain limits use UTC calendar days. The owner key sits on the same server as the agent key. The known-risk list and mitigations are in [05](05_SECURITY_SELF_ASSESSMENT.md#3-known-risk-list).

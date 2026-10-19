@@ -69,7 +69,7 @@ Breaking one of these is a bug, whatever the diff looks like.
 5. **Keys stay on the server.** Never log, return, export or `NEXT_PUBLIC_`-prefix a private key. `.env*` (except `.env.example`) and `data/audit_log.json` are never committed.
 6. **Never fabricate evidence.** No placeholder balances, hashes or "success" states anywhere: UI, docs, deck or tests presented as live runs. Show only what the chain returned.
 7. **Base Sepolia only.** Chain ID 84532 is checked before every simulation. Mainnet support needs a written decision and a security-doc update first.
-8. **New on-chain capability = full set, same commit.** That means typed tool, Zod schema, policy coverage, a test in `tests/`, and a row in the risk matrix in `docs/05_SECURITY_SELF_ASSESSMENT.md`. No arbitrary contract calls, token approvals or swaps without all five.
+8. **New on-chain capability = full set, same commit.** That means typed tool, Zod schema, policy coverage, a test in `tests/`, and a row in the known-risk list (section 3) in `docs/05_SECURITY_SELF_ASSESSMENT.md`. No arbitrary contract calls, token approvals or swaps without all five.
 9. **Money in base units.** New value math uses `bigint` via viem `parseUnits` and `formatUnits`; format only for display. Floating-point USD valuation is a documented known risk and should not spread.
 10. **Docs stay true.** If behaviour changes, update `docs/01_*`, `docs/05_*` and the README in the same commit. Judges read the docs before the code.
 11. **Only two scripts sign outside `executeAction`.**
