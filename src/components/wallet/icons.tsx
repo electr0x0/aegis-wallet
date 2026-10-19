@@ -1,73 +1,81 @@
 "use client";
 
-import type { ComponentType, HTMLAttributes } from "react";
-import { ActivityLogIcon } from "@svg-animated-icons/react/activity-log";
-import { ArrowTopRightIcon } from "@svg-animated-icons/react/arrow-top-right";
-import { FileTextIcon } from "@svg-animated-icons/react/file-text";
-import { LayersIcon } from "@svg-animated-icons/react/layers";
-import { LockClosedIcon } from "@svg-animated-icons/react/lock-closed";
-import { CheckCircledIcon } from "@svg-animated-icons/react/check-circled";
-import { CodeIcon } from "@svg-animated-icons/react/code";
-import { TokensIcon } from "@svg-animated-icons/react/tokens";
-import { Cross2Icon } from "@svg-animated-icons/react/cross-2";
-import { LoopIcon } from "@svg-animated-icons/react/loop";
-import { DashboardIcon } from "@svg-animated-icons/react/dashboard";
-import { MixerHorizontalIcon } from "@svg-animated-icons/react/mixer-horizontal";
-import { ReloadIcon } from "@svg-animated-icons/react/reload";
-import { ExternalLinkIcon } from "@svg-animated-icons/react/external-link";
-import { DownloadIcon } from "@svg-animated-icons/react/download";
-import { CheckIcon } from "@svg-animated-icons/react/check";
-import { InfoCircledIcon } from "@svg-animated-icons/react/info-circled";
-import { PanelLeftIcon } from "@svg-animated-icons/react/panel-left";
-import { ExclamationTriangleIcon } from "@svg-animated-icons/react/exclamation-triangle";
-import { ClockIcon } from "@svg-animated-icons/react/clock";
-import { ChatBubbleIcon } from "@svg-animated-icons/react/chat-bubble";
-import { EnterFullScreenIcon } from "@svg-animated-icons/react/enter-full-screen";
+import type { ComponentType } from "react";
+import {
+  Activity as ActivityIcon,
+  ArrowDownUp as ArrowDownUpIcon,
+  ArrowUpRight as ArrowUpRightIcon,
+  BotMessageSquare,
+  Check as CheckIcon,
+  Clock as ClockIcon,
+  Download as DownloadIcon,
+  ExternalLink as ExternalLinkIcon,
+  FileText as FileTextIcon,
+  Info as InfoIcon,
+  Layers as LayersIcon,
+  LockKeyhole as LockKeyholeIcon,
+  Maximize2,
+  PanelLeft as PanelLeftIcon,
+  RefreshCw as RefreshCwIcon,
+  ScanLine as ScanLineIcon,
+  ScrollText as ScrollTextIcon,
+  ShieldAlert as ShieldAlertIcon,
+  ShieldCheck as ShieldCheckIcon,
+  ShieldOff as ShieldOffIcon,
+  SlidersHorizontal as SlidersHorizontalIcon,
+  Terminal as TerminalIcon,
+  TriangleAlert,
+  Wallet as WalletIcon,
+  X as XIcon,
+  type LucideIcon,
+  type LucideProps,
+} from "lucide-react";
 
-type IconProps = HTMLAttributes<HTMLSpanElement> & { size?: number };
-export type AppIcon = ComponentType<IconProps>;
+export type AppIcon = ComponentType<LucideProps>;
 
-// The library sizes SVGs in em. This adapter preserves our accessible labels
-// and explicit sizes while using the original animated SVG components.
-function icon(Component: ComponentType<{ className?: string }>): AppIcon {
-  return function AnimatedIcon({
+// Lucide is the app's icon set (AGENTS.md). One stroke weight everywhere, and
+// icons are decorative: the button or label around them carries the name.
+function icon(Component: LucideIcon): AppIcon {
+  return function Icon({
     size = 20,
+    strokeWidth = 1.75,
     className = "",
-    style,
     ...props
-  }: IconProps) {
+  }: LucideProps) {
     return (
-      <span
+      <Component
         aria-hidden="true"
-        {...props}
+        size={size}
+        strokeWidth={strokeWidth}
         className={`app-icon ${className}`}
-        style={{ fontSize: size, width: size, height: size, ...style }}
-      >
-        <Component />
-      </span>
+        {...props}
+      />
     );
   };
 }
 
-export const Activity = icon(ActivityLogIcon);
-export const ArrowUpRight = icon(ArrowTopRightIcon);
+export const Activity = icon(ActivityIcon);
+export const ArrowUpRight = icon(ArrowUpRightIcon);
 export const FileText = icon(FileTextIcon);
 export const Layers = icon(LayersIcon);
-export const LockKeyhole = icon(LockClosedIcon);
-export const ShieldCheck = icon(CheckCircledIcon);
-export const Terminal = icon(CodeIcon);
-export const Wallet = icon(TokensIcon);
-export const X = icon(Cross2Icon);
-export const ArrowDownUp = icon(LoopIcon);
-export const ScanLine = icon(DashboardIcon);
-export const SlidersHorizontal = icon(MixerHorizontalIcon);
-export const RefreshCw = icon(ReloadIcon);
+export const LockKeyhole = icon(LockKeyholeIcon);
+export const ShieldCheck = icon(ShieldCheckIcon);
+export const ShieldAlert = icon(ShieldAlertIcon);
+export const ShieldOff = icon(ShieldOffIcon);
+export const Terminal = icon(TerminalIcon);
+export const Wallet = icon(WalletIcon);
+export const X = icon(XIcon);
+export const ArrowDownUp = icon(ArrowDownUpIcon);
+export const ScanLine = icon(ScanLineIcon);
+export const ScrollText = icon(ScrollTextIcon);
+export const SlidersHorizontal = icon(SlidersHorizontalIcon);
+export const RefreshCw = icon(RefreshCwIcon);
 export const ExternalLink = icon(ExternalLinkIcon);
 export const Download = icon(DownloadIcon);
 export const Check = icon(CheckIcon);
-export const Info = icon(InfoCircledIcon);
+export const Info = icon(InfoIcon);
 export const PanelLeft = icon(PanelLeftIcon);
-export const AlertTriangle = icon(ExclamationTriangleIcon);
+export const AlertTriangle = icon(TriangleAlert);
 export const Clock = icon(ClockIcon);
-export const MessageSquare = icon(ChatBubbleIcon);
-export const Expand = icon(EnterFullScreenIcon);
+export const MessageSquare = icon(BotMessageSquare);
+export const Expand = icon(Maximize2);

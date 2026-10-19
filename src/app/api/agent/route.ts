@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
 import { z } from "zod";
 import { runIntent } from "@/lib/agent/runner";
+import { withExecutionProgress } from "@/lib/agent/progress";
 import { autoDrip, decide } from "@/lib/agent/tools";
 import {
   createAgentAccount,
@@ -35,6 +36,11 @@ const policySchema = z.object({
   tier1DailyLimitUsd: z.number().min(0).max(10000),
   maxGasGwei: z.number().positive().max(1000),
   whitelistedAddresses: z.array(z.string().refine(isAddress)).max(100),
+  blacklistedAddresses: z
+    // Existing mock entries use mixed-case hex without EIP-55 checksums.
+    .array(z.string().refine((value) => isAddress(value, { strict: false })))
+    .max(100)
+    .optional(),
   requireApproval: z.boolean(),
   treasury: z
     .object({
@@ -227,6 +233,59 @@ export async function POST(req: NextRequest) {
       throw new Error(
         "Account changed. Refresh before submitting this operation.",
       );
+    if (
+      req.headers.get("accept")?.includes("application/x-ndjson") &&
+      body.type !== "policy"
+    ) {
+      let connected = true;
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          const send = (event: unknown) => {
+            if (connected) {
+              try {
+                controller.enqueue(
+                  encoder.encode(`${JSON.stringify(event)}\n`),
+                );
+              } catch {
+                connected = false;
+              }
+            }
+          };
+          void withAccount(context, () =>
+            withExecutionProgress(
+              (event) => send({ type: "progress", event }),
+              async () => {
+                try {
+                  const result =
+                    body.type === "intent"
+                      ? await runIntent(body.prompt)
+                      : await decide(body.id, body.approve, body.pin);
+                  send({ type: "result", result });
+                } catch (e) {
+                  send({ type: "error", error: (e as Error).message });
+                } finally {
+                  if (connected) {
+                    connected = false;
+                    controller.close();
+                  }
+                }
+              },
+            ),
+          );
+        },
+        cancel() {
+          connected = false;
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
     return await withAccount(context, async () => {
       let result: unknown;
       if (body.type === "intent") result = await runIntent(body.prompt);

@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import * as React from "react";
+import { cn } from "@/lib/utils";
 
 export type PromptComposerVariant = "comfortable" | "compact" | "minimal";
 
@@ -156,7 +157,12 @@ const PromptComposer = React.forwardRef<HTMLFormElement, PromptComposerProps>(
         data-variant={variant}
         data-streaming={isStreaming ? "" : undefined}
         data-dragging={dragging ? "" : undefined}
-        className={`${PANEL_BASE} ${variantPanel[variant]} ${dragging ? "border-ring ring-2 ring-ring/40" : ""} ${className ?? ""}`}
+        className={cn(
+          PANEL_BASE,
+          variantPanel[variant],
+          dragging && "border-ring ring-2 ring-ring/40",
+          className,
+        )}
         onSubmit={(e) => {
           e.preventDefault();
           submit();

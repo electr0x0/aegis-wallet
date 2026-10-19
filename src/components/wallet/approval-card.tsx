@@ -63,7 +63,7 @@ function signingNote(guarded: boolean) {
 function ProposalFacts({ proposal, whitelist, guarded }: FactsProps) {
   const { action, decision } = proposal;
   return (
-    <dl className="approval-details">
+    <dl className="grid min-w-0 gap-3 text-xs [&_dt]:mb-1 [&_dt]:text-[10px] [&_dt]:text-muted-foreground [&_dd]:[overflow-wrap:anywhere]">
       <div>
         <dt>Amount</dt>
         <dd>
@@ -92,7 +92,7 @@ function ProposalFacts({ proposal, whitelist, guarded }: FactsProps) {
       <div>
         <dt>Policy reasons</dt>
         <dd>
-          <ul className="approval-reasons list-disc space-y-1 pl-4">
+          <ul className="list-disc space-y-1 pl-4 text-[11px] leading-relaxed">
             {decision.reasons.map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
@@ -151,7 +151,10 @@ export function ApprovalCard({
     />
   );
   return (
-    <SpotlightCard className="approval-card" glowColor="rgba(168, 93, 10, .06)">
+    <SpotlightCard
+      className="approval-card rounded-lg border-[var(--amber-line)] bg-[var(--amber-tint)] p-3.5 [&+.approval-card]:mt-3"
+      glowColor="rgba(168, 93, 10, .06)"
+    >
       <div className="section-label">
         <LockKeyhole size={14} /> HUMAN AUTHORIZATION{" "}
         <span className="ml-auto">TIER 02</span>

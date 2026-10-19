@@ -11,9 +11,6 @@ importers:
 
   .:
     dependencies:
-      '@svg-animated-icons/react':
-        specifier: ^0.1.2
-        version: 0.1.2(react@19.3.1)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1462,11 +1459,6 @@ packages:
 
   '@scure/bip39@1.6.0':
     resolution: {integrity: sha512-+lF0BbLiJNwVlev4eKelw1WWLaiKXw7sSl8T6FvBlWkdX+94aGJ4o8XjUdlyhTCjd8c+B3KT3JfS8P0bLRNU6A==}
-
-  '@svg-animated-icons/react@0.1.2':
-    resolution: {integrity: sha512-EHbhQxdEXN+OtaGVvn+tv4mJzhIO/tijfVr8K9J7uSiU8AA868LyF/AKjFVKtpmIdNcNV/aZFvBfqn1sfvbNpw==}
-    peerDependencies:
-      react: '>=18'
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -4020,10 +4012,6 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
-
-  '@svg-animated-icons/react@0.1.2(react@19.3.1)':
-    dependencies:
-      react: 19.3.1
 
   '@swc/helpers@0.5.15':
     dependencies:

@@ -63,6 +63,10 @@ vi.mock("../src/lib/store", async (importOriginal) => {
   };
 });
 import { executeAction, decide } from "../src/lib/agent/tools";
+import {
+  withExecutionProgress,
+  type ExecutionProgress,
+} from "../src/lib/agent/progress";
 const action: Action = {
   kind: "transfer_token",
   token: "USDC",
@@ -79,6 +83,44 @@ beforeEach(() => {
   mocks.balance.mockReset().mockResolvedValue(10n ** 30n);
 });
 describe("Serialized execution and approval", () => {
+  it("reports actual stages and returned hashes while isolating disconnected observers", async () => {
+    const events: ExecutionProgress[] = [];
+    await withExecutionProgress(
+      (event) => events.push(event),
+      () => executeAction(action),
+    );
+    expect(
+      events.filter((x) => x.stage === "simulation").map((x) => x.status),
+    ).toEqual(["running", "success"]);
+    expect(
+      events.filter((x) => x.stage === "broadcast").map((x) => x.status),
+    ).toEqual(["running", "submitted", "success"]);
+    expect(events.find((x) => x.status === "submitted")?.txHash).toBe(
+      `0x${"a".repeat(64)}`,
+    );
+    mocks.send.mockClear();
+    await withExecutionProgress(
+      () => {
+        throw new Error("UI disconnected");
+      },
+      () => executeAction(action),
+    );
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+  });
+  it("never reports simulation or broadcast after a pre-RPC hard block", async () => {
+    const events: ExecutionProgress[] = [];
+    await withExecutionProgress(
+      (event) => events.push(event),
+      () =>
+        executeAction({
+          ...action,
+          recipient: "0x000000000000000000000000000000000000dead",
+        }),
+    );
+    expect(events.map((x) => x.stage)).toEqual(["policy", "policy"]);
+    expect(events.at(-1)?.status).toBe("failed");
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
   it("prevents concurrent writes from exceeding the autonomous budget", async () => {
     mocks.p.tier1DailyLimitUsd = 0.5;
     await Promise.all([executeAction(action), executeAction(action)]);

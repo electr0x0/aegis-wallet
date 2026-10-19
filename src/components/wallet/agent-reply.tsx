@@ -245,7 +245,7 @@ export function AgentReply({ reply, raw }: { reply: Reply; raw?: unknown }) {
       )}
       {reply.txHash && (
         <a
-          className="transaction-link"
+          className="mt-2 inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline"
           href={`${EXPLORER}/tx/${reply.txHash}`}
           target="_blank"
           rel="noreferrer"

@@ -17,19 +17,91 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
-  Wallet,
-  SlidersHorizontal,
-  FileText,
-  MessageSquare,
+  ScanLine,
+  ScrollText,
+  ShieldAlert,
   ShieldCheck,
+  ShieldOff,
+  SlidersHorizontal,
+  Wallet,
 } from "./icons";
+import { timeLeft } from "./guard-panel";
 import { useWallet } from "./wallet-provider";
 
 const DASHBOARD_VIEWS = [
-  { id: "portfolio", label: "Portfolio", Icon: Wallet },
-  { id: "policy", label: "Guardrails", Icon: SlidersHorizontal },
-  { id: "evidence", label: "Evidence", Icon: FileText },
+  { id: "command", label: "Command Center", Icon: ScanLine },
+  { id: "portfolio", label: "Portfolio & Runway", Icon: Wallet },
+  { id: "policy", label: "Guardrails & Policy", Icon: SlidersHorizontal },
+  { id: "evidence", label: "Execution Evidence", Icon: ScrollText },
 ];
+
+// The right half of the shield in src/app/icon.svg, drawn over the white whole.
+const SHIELD =
+  "M112 108Q112 80 140 80H372Q400 80 400 108V256C400 352 336 408 256 440C176 408 112 352 112 256Z";
+const SHIELD_RIGHT = "M256 80H372Q400 80 400 108V256C400 352 336 408 256 440Z";
+
+function BrandMark() {
+  return (
+    <span className="brand-mark">
+      <svg viewBox="0 0 512 512" aria-hidden="true">
+        <path d={SHIELD} fill="#ffffff" />
+        <path d={SHIELD_RIGHT} fill="#17a374" />
+      </svg>
+    </span>
+  );
+}
+
+type GuardState = "loading" | "active" | "expired" | "unknown" | "off";
+
+const GUARD_ICON = {
+  loading: ShieldCheck,
+  active: ShieldCheck,
+  expired: ShieldAlert,
+  unknown: ShieldAlert,
+  off: ShieldOff,
+};
+
+// Footer status: what actually protects the funds right now, from live data.
+function GuardSessionStatus({ onSelect }: { onSelect: () => void }) {
+  const { snapshot } = useWallet();
+  const guard = snapshot?.guard;
+  const remaining = guard ? timeLeft(guard.sessionExpiry) : null;
+  let state: GuardState = "off";
+  if (!snapshot) state = "loading";
+  else if (guard) state = remaining ? "active" : "expired";
+  else if (snapshot.portfolio?.mode === "guard") state = "unknown";
+  const title = {
+    loading: "Checking AgentGuard",
+    active: "AgentGuard active",
+    expired: "Session key expired",
+    unknown: "Guard unreadable",
+    off: "No on-chain guard",
+  }[state];
+  const detail = {
+    loading: "Base Sepolia",
+    active: `Session key, ${remaining}`,
+    expired: "Renew to resume autonomy",
+    unknown: "Contract status read failed",
+    off: "EOA mode, policy only",
+  }[state];
+  const Icon = GUARD_ICON[state];
+  return (
+    <SidebarMenuButton
+      size="lg"
+      tooltip={`${title}: ${detail}`}
+      data-guard={state}
+      onClick={onSelect}
+    >
+      <span className="guard-status-mark">
+        <Icon size={16} />
+      </span>
+      <span className="guard-status-text">
+        <span>{title}</span>
+        <small>{detail}</small>
+      </span>
+    </SidebarMenuButton>
+  );
+}
 
 export function AppSidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
@@ -42,9 +114,7 @@ export function AppSidebar() {
   const openView = (id: string) => {
     setTab(id);
     close();
-    if (pathname !== "/") router.push("/#telemetry");
-    else
-      document.getElementById("telemetry")?.scrollIntoView({ block: "start" });
+    if (pathname !== "/") router.push("/");
   };
   return (
     <Sidebar collapsible="icon" aria-label="Workspace navigation">
@@ -55,14 +125,12 @@ export function AppSidebar() {
               asChild
               size="lg"
               tooltip="AegisWallet home"
-              className="hover:bg-transparent"
+              className="sidebar-home"
             >
               <Link href="/" onClick={close}>
-                <span className="brand-mark">
-                  <ShieldCheck size={17} />
-                </span>
+                <BrandMark />
                 <span className="sidebar-brand">
-                  aegis<span>wallet</span>
+                  Aegis<span>Wallet</span>
                 </span>
               </Link>
             </SidebarMenuButton>
@@ -74,18 +142,6 @@ export function AppSidebar() {
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/agent"}
-                  tooltip="Agent chat"
-                >
-                  <Link href="/agent" onClick={close}>
-                    <MessageSquare size={20} />
-                    <span>Agent chat</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
               {DASHBOARD_VIEWS.map(({ id, label, Icon }) => (
                 <SidebarMenuItem key={id}>
                   <SidebarMenuButton
@@ -93,7 +149,7 @@ export function AppSidebar() {
                     tooltip={label}
                     onClick={() => openView(id)}
                   >
-                    <Icon size={20} />
+                    <Icon size={16} />
                     <span>{label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -102,24 +158,10 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border py-4">
+      <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Local operator · Base Sepolia"
-              className="pointer-events-none"
-              asChild
-            >
-              <div>
-                <span className="operator-avatar">AS</span>
-                <span className="flex flex-col gap-0.5">
-                  <span>Local operator</span>
-                  <span className="text-xs text-muted-foreground">
-                    Base Sepolia testnet
-                  </span>
-                </span>
-              </div>
-            </SidebarMenuButton>
+            <GuardSessionStatus onSelect={() => openView("portfolio")} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

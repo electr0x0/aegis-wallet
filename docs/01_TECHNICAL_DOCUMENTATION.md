@@ -172,7 +172,7 @@ If the result is below `minRunwayMonths`, the transfer needs a human. The fiat f
 | Always ask before signing         | off                                                                                        |
 | Treasury profile                  | $8,990 fiat reserve, $3,000 monthly expenses, 3-month floor                                |
 
-`pnpm setup-wallets` appends the operator's own vault address to the whitelist. In the dashboard, the operator can edit the caps, the gas ceiling, the whitelist and the "always ask" switch. The API bounds every value. Each saved change is recorded as a sealed `POLICY_UPDATE` ledger entry carrying the old and new policy hashes. The blacklist cannot be changed through the API, and the treasury profile has no dashboard editor; change it in `data/policy.json`. The policy file is read on every request.
+`pnpm setup-wallets` appends the operator's own vault address to the whitelist. In Guardrails & Policy, the operator can edit the caps, gas ceiling, whitelist, blacklist and "always ask" switch. Every save requires a fresh account PIN; the API validates address syntax and bounds every value. Each saved change is recorded as a sealed `POLICY_UPDATE` ledger entry carrying the old and new policy hashes. Blacklist precedence remains a hard block. The Portfolio & Runway calculator previews a treasury profile locally without saving it; persist that profile in the account's policy file. The policy file is read on every request.
 
 ### 3.3 Deterministic rationale
 
@@ -290,7 +290,7 @@ The file is then replaced atomically: written to a temporary file, then renamed.
 
 ### 5.3 Verification (`verifyLedger`)
 
-Every dashboard refresh (`GET /api/agent`) re-verifies the whole chain. The Evidence tab shows "Ledger verified · N sealed", or the first broken entry and the reason. For each entry in order:
+Every dashboard refresh (`GET /api/agent`) re-verifies the whole chain. Execution Evidence shows "Ledger verified · N sealed", or the first broken entry and the reason. For each entry in order:
 
 1. It must be sealed, and its `prevHash` must equal the previous entry's `hash`.
 2. Recomputing the hash must reproduce `hash`.
@@ -326,7 +326,15 @@ An operator step attests the ledger head on the Ethereum Attestation Service, us
 | What the model cannot do | Sign anything; approve a pending proposal (approval exists only as an operator API call); trigger a ledger anchor (an operator script only); call an untyped function; replace the stored prompt (the server overwrites `prompt` in every tool call with the operator's original text); bypass refusals for swaps, yield, staking or bridging, which are applied before the planner runs                          |
 | Without an LLM           | The demo scenarios, single wraps and transfers, portfolio reads and audits all run through the deterministic parser with no API key                                                                                                                                                                                                                            |
 
-The five dashboard scenarios use the deterministic parser. The planner is needed only for multi-step or free-form requests.
+The five dashboard scenarios use the deterministic parser. The planner is needed only for multi-step or free-form requests. The vault scenario selects an available asset using bigint base units: 1 USDC, otherwise 0.0001 WETH, otherwise 0.0001 ETH with a positive gas remainder, otherwise the remaining partial USDC. An unavailable or untrusted vault disables that scenario. This is a proposal convenience, not a policy exception.
+
+### Operator console and execution progress
+
+The dashboard occupies one viewport. GodUI Sidebar selects Command Center (portfolio, allocation, pending approvals and the latest five audit events), Portfolio & Runway, Guardrails & Policy, or Execution Evidence. The center view and permanent right Intent Studio scroll independently beneath the account header and compact live telemetry. The copilot can expand to 640px; below 1024px it opens in a GodUI Sheet. `/agent` redirects to `/`. The conversation and draft survive center-view switches; Clear Thread removes only client conversation state. Evidence filters change the displayed rows, while Export includes the selected account's full history.
+
+GodUI Lab Bento Grid/Card compose the center panels, Breadcrumbs tracks the selected view, and Agent Timeline/Step presents recent events and execution progress with collapsible details. Evidence uses Lab Filter Bar: selections within tier, status or pre-flight facets are combined with OR, while different facets and text search are combined with AND. No filter changes stored audit entries. The Number Ticker starts at the actual returned reference portfolio value. GodUI Radio Group supplies keyboard-accessible risk preset selection during provisioning.
+
+Intent and approval requests can negotiate `application/x-ndjson`. The same local-origin, account, PIN and execution boundaries apply to streamed and JSON requests. An AsyncLocalStorage observer reports actual policy decisions, EVM simulation, durable broadcast submission and receipt outcomes from the execution path. Read-only tools report a Tier 0 check without inventing simulation or broadcast events. A hash is emitted only after the returned hash is persisted. Observer failures and client disconnects do not interrupt a reserved transaction; the audit ledger remains authoritative. The client never automatically retries an interrupted stream and directs the operator to Evidence if no final result arrives.
 
 ## 7. Integrations and addresses
 

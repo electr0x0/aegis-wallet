@@ -35,21 +35,26 @@ Future additions use `pnpm dlx shadcn@4.22.1 add @godui/<name>` or `pnpm dlx sha
 
 ## Component map
 
-| Application surface                         | Official components                                                       |
-| ------------------------------------------- | ------------------------------------------------------------------------- |
-| Actions and navigation                      | GodUI Button, Tooltip                                                     |
-| Workspace navigation                        | GodUI Sidebar, SidebarProvider, SidebarTrigger, SidebarRail, mobile Sheet |
-| Portfolio / guardrails / evidence views     | GodUI Tabs and animated indicator                                         |
-| Policy editor                               | GodUI Input, Textarea, Slider, Switch                                     |
-| Allocation and autonomous budget            | GodUI Progress                                                            |
-| Loading states                              | GodUI Skeleton                                                            |
-| Transaction review                          | GodUI Alert Dialog + Lab Hold Confirm Button                              |
-| Metric tiles and wallet / proposal surfaces | Lab Spotlight Card                                                        |
-| Metric values and evidence count            | Lab Number Ticker                                                         |
-| Demo scenarios                              | Lab Prompt Suggestions                                                    |
-| Natural language input                      | Lab Prompt Composer                                                       |
-| Agent chat (`/agent` and Intent studio)     | GodUI Conversation Thread / Conversation Message                          |
-| Audit evidence                              | Lab Agent Timeline / Agent Step                                           |
+| Application surface                     | Official components                                                                                  |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Actions and navigation                  | GodUI Button, Tooltip                                                                                |
+| Workspace navigation                    | GodUI Sidebar, SidebarProvider, SidebarTrigger, SidebarRail, mobile Sheet                            |
+| Four center views                       | GodUI Sidebar navigation; no duplicate body tabs                                                     |
+| Workspace breadcrumb                    | Lab Breadcrumbs with animated path changes                                                           |
+| Portfolio, allocation and policy panels | Lab Bento Grid / Bento Card and Spotlight Card                                                       |
+| Policy editor                           | GodUI Input, Textarea, Slider, Switch                                                                |
+| Allocation and autonomous budget        | GodUI Progress                                                                                       |
+| Loading states                          | GodUI Skeleton                                                                                       |
+| Transaction review                      | GodUI Alert Dialog + Lab Hold Confirm Button                                                         |
+| Portfolio / policy / evidence actions   | GodUI Button, Input, Progress and theme tokens                                                       |
+| Live telemetry                          | Compact ribbon with GodUI Progress                                                                   |
+| Demo scenarios                          | Lab Prompt Suggestions, compact chips with disabled-reason support                                   |
+| Natural language input                  | Lab Prompt Composer                                                                                  |
+| Permanent Intent Studio                 | GodUI Conversation Thread / Conversation Message; mobile Sheet                                       |
+| Audit evidence                          | Lab Filter Bar (tier, status and pre-flight facets), native accessible table, GodUI Button and Input |
+| Recent events and execution progress    | Lab Agent Timeline / Agent Step with collapsible details                                             |
+| Reference portfolio total               | Lab Number Ticker, initialized at the actual returned value                                          |
+| Provisioning risk presets               | GodUI Radio Group and animated Radio Group Item                                                      |
 
 Core files are in `src/components/ui`, Lab files in `src/components/godui`, and application compositions in `src/components/wallet`. Shared GodUI motion hooks are in `src/hooks`.
 
@@ -61,6 +66,12 @@ Five wallet surfaces have no GodUI counterpart and are composed from the theme t
 
 The Prompt Composer adds `allowAttachments` and `maxLength` props. Attachments are disabled because this wallet accepts text intents only; the input is bounded to the backend's 4,000-character limit. No stop-generation button is shown for on-chain operations because a submitted transaction cannot be cancelled by stopping a browser request.
 
+The console refactor queried the GodUI MCP for table, conversation and navigation components before composing the views. The table registry lookup returned HTTP 404, so Execution Evidence uses an accessible native table with GodUI controls. `console.css` locks the root to `100dvh`, gives each pane independent scrolling, and pins the Lab Prompt Composer and compact scenario chips below the conversation. The right panel is 420px (460px at XL) and can expand to 640px without replacing the center view. Below 1024px the copilot uses a Sheet. The 56px telemetry ribbon replaces metric cards, and sidebar navigation replaces the body tabs. `/agent` now redirects to the shared console.
+
+The follow-up composition pass uses the MCP-returned Bento Grid/Card, Filter Bar, Breadcrumbs and Radio Group source directly. Existing Agent Timeline/Step now render both recent audit events and actual execution progress. Held and submitted events use the timeline's pending state; they never acquire a successful checkmark before an actual successful event. Reference amounts initialize Number Ticker at the returned value rather than counting through invented intermediate balances. The evidence facets combine selections within a facet with OR and across facets with AND; Clear all resets them. Export still includes all account events.
+
+Local adaptations use the shared `cn` adapter for predictable class overrides in Bento Grid/Card, Spotlight Card, Conversation Thread and Prompt Composer. Conversation Message supports full-width rich content and uses a block body for nested execution cards. Prompt Suggestions exposes a compact chip option. Filter Bar adds explicit accessible facet/option labels and multi-select semantics. These replace deep CSS overrides: `console.css` decreased from 931 to 239 lines, retaining viewport/pane geometry, account-header responsiveness, shared domain copy styles and native evidence-table formatting. The registry components supply surface styling and motion.
+
 Tier 2 approval opens a GodUI review dialog with the full destination, amount, gas estimate and policy reasons. The Lab control requires a one-second pointer or keyboard hold before requesting approval. Releasing early cancels the hold. Server-side simulation, approval uniqueness and deterministic policy remain authoritative.
 
 The Hold Confirm Button has two local safety adaptations: only the primary pointer button starts a hold, and losing keyboard focus cancels an in-progress hold.
@@ -71,7 +82,7 @@ The sidebar is installed from `https://godui.design/r/sidebar.json`. It expands 
 
 Geist Sans and Geist Mono are bundled locally with `geist` and loaded through Next.js in the root layout, matching GodUI's brand-font instructions. Both the theme utility tokens and application CSS use the Geist variables.
 
-Application icons use per-icon imports from `@svg-animated-icons/react` ([library](https://svg-animated-icons.vercel.app/)). The `wallet/icons.tsx` adapter supplies sizing and decorative accessibility defaults. Sidebar toggle and Sheet close controls use the same library. CSS disables icon animations for reduced-motion users. GodUI Lab's internal control glyphs remain part of the upstream component source.
+Application icons are [Lucide](https://lucide.dev) (`lucide-react`), as AGENTS.md requires. Wallet components import them through the `wallet/icons.tsx` adapter, which sets one 1.75 stroke weight and decorative `aria-hidden` defaults; console and account UI import `lucide-react` directly. Sidebar rows use 16px icons, the size the collapsed 32px rail is built for. The brand mark (`src/app/icon.svg`, also the favicon) is a shield split white and emerald; `app-sidebar.tsx` draws the same paths inline. The sidebar footer shows the live AgentGuard session state. The sidebar colour comes from the `--sidebar` token, which the sliding surface paints: never set a background on `sidebar-inner`, because the inner keeps its full width while the panel collapses and would snap instead of sliding. GodUI Lab's internal control glyphs remain part of the upstream component source.
 
 ## Validation
 
@@ -79,4 +90,4 @@ Account provisioning and PIN confirmation use the official GodUI Dialog, Dropdow
 
 For a production check alongside a running development server, set `AEGIS_BUILD_DIR=.next-verify` before `pnpm build` to isolate Next.js output. The default output directory remains `.next`.
 
-Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. The Vitest suite includes policy, execution concurrency, local API access, approval review/cancellation/confirmation, and text-only composer behavior. Browser checks of the light theme measured zero horizontal overflow on the Portfolio, Guardrails and Evidence tabs at 360px and 1024px, and confirmed a visible emerald focus ring on keyboard-focused scenario buttons. Live portfolio reads and blocked security scenarios can be exercised without funding; live approval/broadcast requires funded Base Sepolia assets.
+Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. The Vitest suite includes policy, execution concurrency, local API access, approval review/cancellation/confirmation, text-only composer behavior, funded-asset scenario selection and streamed progress parsing. Browser checks covered all four center views, retained conversation/draft across navigation, evidence tier filters, the 640px expansion, and Clear Thread. At 1280×800 and 390×844 the root document matched the viewport; mobile Intent Studio kept its composer pinned to the Sheet bottom. Live portfolio reads can be exercised without funding; live approval/broadcast requires funded Base Sepolia assets.

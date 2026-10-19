@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import * as React from "react";
+import { cn } from "@/lib/utils";
 
 export type ConversationVariant = "bubbles" | "document" | "compact";
 export type MessageRole = "user" | "assistant" | "system";
@@ -90,7 +91,7 @@ const ConversationThread = React.forwardRef<
           ref={ref}
           data-slot="conversation-thread"
           data-variant={variant}
-          className={`${THREAD_BASE} ${className ?? ""}`}
+          className={cn(THREAD_BASE, className)}
           onScroll={(e) => {
             const el = e.currentTarget;
             const atBottom =
@@ -149,6 +150,9 @@ export type ConversationMessageProps = React.HTMLAttributes<HTMLDivElement> & {
   actions?: MessageAction[];
   /** Shows a blinking caret at the end while tokens stream in. */
   streaming?: boolean;
+  /** Local integration: rich execution cards can fill a docked thread. */
+  fullWidth?: boolean;
+  contentClassName?: string;
 };
 
 const BUBBLE_BY_ROLE: Record<MessageRole, string> = {
@@ -169,6 +173,8 @@ const ConversationMessage = React.forwardRef<
       timestamp,
       actions,
       streaming = false,
+      fullWidth = false,
+      contentClassName,
       className,
       children,
       ...props
@@ -201,7 +207,7 @@ const ConversationMessage = React.forwardRef<
           </div>
         ) : null}
         <div
-          className={`flex min-w-0 flex-col gap-1 ${isUser && !isDocument ? "items-end" : "items-start"} ${isDocument ? "w-full" : "max-w-[80%]"}`}
+          className={`flex min-w-0 flex-col gap-1 ${isUser && !isDocument ? "items-end" : "items-start"} ${isDocument || fullWidth ? "w-full" : "max-w-[80%]"}`}
         >
           {(name || timestamp) && !isCompact ? (
             <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
@@ -214,18 +220,27 @@ const ConversationMessage = React.forwardRef<
             </div>
           ) : null}
           <div
-            className={
+            className={cn(
               isDocument
                 ? "w-full text-sm leading-7 text-foreground"
-                : `rounded-2xl px-3.5 py-2 text-sm leading-6 shadow-2xs ${BUBBLE_BY_ROLE[role]} ${isUser ? "rounded-br-md" : "rounded-bl-md"}`
-            }
+                : `rounded-2xl px-3.5 py-2 text-sm leading-6 shadow-2xs ${BUBBLE_BY_ROLE[role]} ${isUser ? "rounded-br-md" : "rounded-bl-md"}`,
+              fullWidth && "w-full rounded-lg p-2.5",
+              contentClassName,
+            )}
           >
-            <span className="[overflow-wrap:anywhere] whitespace-pre-wrap">
+            <div
+              className={cn(
+                "[overflow-wrap:anywhere]",
+                role === "assistant"
+                  ? "whitespace-normal"
+                  : "whitespace-pre-wrap",
+              )}
+            >
               {children}
               {streaming ? (
                 <span className="ml-0.5 inline-block h-[1.05em] w-[2px] -translate-y-px animate-pulse bg-current align-middle motion-reduce:animate-none" />
               ) : null}
-            </span>
+            </div>
           </div>
           {actions && actions.length > 0 ? (
             <div

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { reportProgress } from "./progress";
 import { BaseError, formatUnits, isAddress, parseUnits, zeroHash } from "viem";
 import { z } from "zod";
 import {
@@ -234,24 +235,42 @@ async function inspect(
   approved: boolean,
   onboardingRecipient?: string,
 ): Promise<Inspection> {
+  reportProgress({
+    stage: "policy",
+    status: "running",
+    message: "Checking deterministic limits and recipient rules.",
+    start: true,
+  });
   const usd = referenceUsd(a);
   const spentUsd = autonomousSpendUsd(l);
   const finish = (
     decision: Decision,
     gasEstimate: string,
     error: string,
-  ): Inspection => ({
-    decision,
-    usd,
-    gasEstimate,
-    error,
-    rationale: explainDecision(a, decision, {
+  ): Inspection => {
+    reportProgress({
+      stage: "policy",
+      status:
+        decision.tier === "BLOCKED"
+          ? "failed"
+          : decision.tier === "TIER_2_HITL"
+            ? "held"
+            : "success",
+      message: `${decision.tier}: ${decision.reasons.join("; ")}`,
+    });
+    return {
+      decision,
       usd,
-      spentUsd,
-      policy: p,
-      simulation: !error,
-    }),
-  });
+      gasEstimate,
+      error,
+      rationale: explainDecision(a, decision, {
+        usd,
+        spentUsd,
+        policy: p,
+        simulation: !error,
+      }),
+    };
+  };
 
   // Tokens sent to a token contract are burned, whatever the whitelist says.
   if (
@@ -280,11 +299,23 @@ async function inspect(
   let gasGwei = 0;
   let holdings: number | undefined;
   let error = "";
+  reportProgress({
+    stage: "simulation",
+    status: "running",
+    message:
+      "Checking chain 84532, estimating gas and simulating the exact call.",
+  });
   try {
     ({ gasEstimate, gasGwei } = await simulate(a));
     holdings = await holdingsUsd(a, p);
+    reportProgress({
+      stage: "simulation",
+      status: "success",
+      message: `Pre-flight passed. Estimated ${gasEstimate} gas units.`,
+    });
   } catch (e) {
     error = await simulationFailure(a, e);
+    reportProgress({ stage: "simulation", status: "failed", message: error });
   }
 
   let decision = evaluateTransactionPolicy(a, p, {
@@ -343,6 +374,7 @@ async function broadcast(
       rejection = `Owner approval failed: ${briefError(e)}`;
     }
     if (rejection) {
+      reportProgress({ stage: "policy", status: "failed", message: rejection });
       proposal.status = "BLOCKED";
       const rationale = `BLOCKED at approval: ${rejection}. No transaction was broadcast.`;
       const result = { ...check, decision: blocked(rejection), rationale };
@@ -374,6 +406,12 @@ async function broadcast(
   await saveLedger(l);
 
   try {
+    reportProgress({
+      stage: "broadcast",
+      status: "running",
+      message:
+        "Spend reservation persisted. Submitting the signed transaction.",
+    });
     // AgentGuard's target allowlist excludes EAS, so guard.execute would revert. A ledger
     // anchor goes straight from the agent EOA; the policy has proven it carries zero value.
     const call = isAnchor(a)
@@ -385,6 +423,13 @@ async function broadcast(
     if (proposal) proposal.status = "SUBMITTED";
     log(l, entry);
     await saveLedger(l);
+    reportProgress({
+      stage: "broadcast",
+      status: "submitted",
+      message:
+        "Transaction hash persisted. Waiting for the Base Sepolia receipt.",
+      txHash: hash,
+    });
 
     const receipt = await publicClient.waitForTransactionReceipt({
       hash,
@@ -392,6 +437,15 @@ async function broadcast(
     });
     entry.status = receipt.status === "success" ? "CONFIRMED" : "REVERTED";
     if (proposal) proposal.status = entry.status;
+    reportProgress({
+      stage: "broadcast",
+      status: receipt.status === "success" ? "success" : "failed",
+      message:
+        receipt.status === "success"
+          ? "Successful receipt observed on Base Sepolia."
+          : "Transaction mined but reverted.",
+      txHash: hash,
+    });
     const uid =
       a.kind === "anchor_ledger" ? attestationUid(receipt.logs) : undefined;
     if (uid) entry.reasons = [...entry.reasons, `EAS attestation UID ${uid}`];
@@ -401,6 +455,14 @@ async function broadcast(
     entry.reasons = [...entry.reasons, briefError(e)];
     log(l, entry);
     await saveLedger(l);
+    reportProgress({
+      stage: "broadcast",
+      status: entry.txHash ? "submitted" : "failed",
+      message: entry.txHash
+        ? "Hash recorded; receipt pending. Do not retry."
+        : "Broadcast outcome unresolved. Inspect the wallet before retrying.",
+      txHash: entry.txHash,
+    });
     throw new Error(
       entry.txHash
         ? `Transaction submitted: ${entry.txHash}. Receipt pending; do not retry.`
@@ -554,6 +616,12 @@ export async function decide(id: string, approve: boolean, pin?: string) {
 }
 
 export async function get_wallet_portfolio(prompt: string) {
+  reportProgress({
+    stage: "policy",
+    status: "success",
+    message: "Tier 0 read-only portfolio request. No transaction signing.",
+    start: true,
+  });
   const result = await portfolio();
   await exclusive(async () => {
     const l = await ledger();

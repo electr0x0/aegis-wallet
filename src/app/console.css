@@ -1,0 +1,236 @@
+/* Fixed viewport workspace: each pane owns its scrolling. */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+.app-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+.app-main {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-header {
+  height: 64px;
+  min-height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: white;
+}
+.header-identity,
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.account-switcher {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.account-switcher-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.account-trigger {
+  max-width: min(320px, 30vw);
+  font-size: 12px;
+  height: 30px;
+}
+.account-session-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.console-workspace {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+.center-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fafbfa;
+}
+.stage-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+  container-type: inline-size;
+}
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 10px var(--font-mono);
+  letter-spacing: 0.07em;
+  color: var(--muted-foreground);
+}
+.reference-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+  margin-top: 12px;
+}
+.reference-note > .app-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.supporting-copy {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 11px;
+}
+.evidence-table th {
+  background: #f8f9f8;
+  font-weight: 500;
+  padding: 12px;
+  font-size: 10px;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.evidence-table td {
+  border-top: 1px solid var(--border);
+  padding: 12px;
+  vertical-align: top;
+  min-width: 90px;
+}
+.evidence-table td:nth-child(2) {
+  min-width: 220px;
+  max-width: 350px;
+}
+.evidence-table td:nth-child(4) {
+  min-width: 150px;
+  max-width: 240px;
+  overflow-wrap: anywhere;
+}
+.evidence-table time {
+  font: 10px/1.6 var(--font-mono);
+}
+.evidence-table summary {
+  cursor: pointer;
+  font-size: 10px;
+}
+
+/* Pane widths and container breakpoints belong to the workspace, not cards. */
+.console-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.copilot-panel {
+  width: 420px;
+}
+.mobile-copilot-toggle {
+  display: none;
+}
+.mobile-copilot-sheet {
+  width: min(100vw, 460px);
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
+.mobile-copilot-sheet .copilot-panel {
+  width: 100%;
+  border: 0;
+}
+@container (max-width: 520px) {
+  .console-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (min-width: 1280px) {
+  .copilot-panel {
+    width: 460px;
+  }
+  .copilot-panel[data-expanded="true"] {
+    width: 640px;
+  }
+}
+@media (max-width: 1279px) {
+  .copilot-expand {
+    display: none;
+  }
+  [data-slot="breadcrumbs"] ol > li:not(:last-child) {
+    display: none;
+  }
+}
+@media (max-width: 1023px) {
+  .mobile-copilot-toggle {
+    display: inline-flex;
+  }
+  .stage-scroll {
+    padding: 16px;
+  }
+  .account-session-meta {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .app-header {
+    height: 96px;
+    min-height: 96px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .header-identity {
+    width: 100%;
+    gap: 8px;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .account-switcher {
+    flex: 1;
+    width: 0;
+  }
+  .account-trigger {
+    max-width: none;
+    width: 100%;
+    height: 28px;
+    min-width: 0;
+  }
+  .account-switcher-main > button:last-child:not(:first-child) {
+    display: none;
+  }
+}
