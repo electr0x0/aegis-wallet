@@ -30,6 +30,31 @@ const facts: TreasuryFacts = {
   gasGwei: 1,
 };
 describe("Treasury mandate integer calculations", () => {
+  it("rounds a sub-microdollar fee liability up before permitting a runway surplus", () => {
+    const p = {
+      ...policy,
+      treasury: {
+        fiatReserveUsd: 0,
+        monthlyExpensesUsd: 1,
+        minRunwayMonths: 1,
+      },
+    };
+    const result = calculateSweep(
+      settings,
+      {
+        ...facts,
+        gasGwei: 0.000000001,
+        mode: "guard",
+        balances: { ETH: "0", WETH: "0", USDC: "1.000001" },
+      },
+      p,
+      0n,
+    );
+    expect(result.action).toBeNull();
+    expect(
+      result.limits.find((l) => l.label === "Surplus above runway floor")?.usd,
+    ).toBe("0");
+  });
   it("takes the most restrictive requested, single and remaining daily limit", () => {
     const sweep = calculateSweep(
       settings,

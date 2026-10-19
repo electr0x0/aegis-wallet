@@ -134,7 +134,7 @@ export function calculateSweep(
         decimalUnits(treasury.fiatReserveUsd, 6) +
           holdings -
           runwayReserve -
-          (fee * ETH_PRICE) / WEI,
+          (fee * ETH_PRICE + WEI - 1n) / WEI,
       )
     : holdings;
   const cap = minimum(requested, single, daily, runwaySurplus);
