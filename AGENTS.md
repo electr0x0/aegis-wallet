@@ -53,7 +53,7 @@ pnpm only. Never create `package-lock.json` or `yarn.lock`.
 | `scripts/compile-guard.mjs` | Pinned-solc compile of the guard. |
 | `src/components/godui/`, `src/components/ui/` | GodUI and shadcn source. See `docs/GODUI_INTEGRATION.md`. |
 | `src/components/wallet/` | Dashboard: intent studio (demo prompts), approval card, guard panel, runway tile, evidence. |
-| `tests/` | Vitest: policy engine, execution and approvals (EOA mode), API boundary, approval UI. No contract tests yet. |
+| `tests/` | Vitest: policy engine, execution and approvals (EOA mode), API boundary, approval UI. `agent_guard.contract.test.ts` runs the AgentGuard artifact on an in-process EVM (offline, not Base Sepolia). |
 | `data/policy.json` | Committed default policy. `data/audit_log.json` is private and ignored. |
 | `docs/DEMO_SCRIPT.md` | Demo video and live-final script, deck outline, submission checklist. |
 | `docs/06_EXECUTION_EVIDENCE.md` | Deliverable 06: real transaction hashes. Only hashes the chain returned (rule 6). |
