@@ -231,7 +231,7 @@ Calldata shorter than four bytes maps to selector zero and is rejected. The guar
    4. It signs the digest as an EIP-191 personal message.
 3. The session key submits `executeApproved`. The contract recovers the signer with `ecrecover`. It rejects signatures that are not 65 bytes, high-`s` (malleable) signatures, `v` other than 27 or 28, and a zero recovered address. The signer must equal `owner`.
 
-Replay protection: the digest binds chain ID, guard address, target, value, calldata hash, nonce and deadline. Each nonce can be used once. Only the current session key can submit, so `revokeSession` also invalidates any signature not yet submitted.
+Replay protection: the digest binds chain ID, guard address, target, value, calldata hash, nonce and deadline. Each nonce can be used once. Only the current session key can submit, so `revokeSession` also blocks any signature not yet submitted. A restore with `setSession` before that signature's 10-minute deadline makes it valid again.
 
 ### 4.5 Errors and events
 

@@ -111,7 +111,7 @@ Each Tier 1 or Tier 2 request waits for the receipt (timeout 60 s). Cut the wait
 - If the RPC is slow, play the recorded segment for that demo.
 - If the LLM is unavailable, skip the optional segment; Demos 1–4 do not use it.
 - If the session has expired, run `pnpm guard:deploy --renew` before going on stage.
-- If `--renew` after a revoke says the owner needs ETH, fund the printed owner address from a faucet, then run it again. The agent cannot fund it once the session is revoked.
+- If `--renew` after a revoke says the owner needs ETH, fund the printed owner address from a faucet, then run it again. The agent cannot fund it once the session is revoked, and a relayed renewal cannot undo a revoke.
 
 **Likely questions:**
 
