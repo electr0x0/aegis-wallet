@@ -1,9 +1,38 @@
 "use client";
 import { useState } from "react";
-import { Bot, Expand, Lock, Minimize2, ShieldCheck, X } from "lucide-react";
+import { Expand, Lock, Minimize2, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgentChat } from "./agent-chat";
 import { useWallet } from "./wallet-provider";
+
+// The Aegis shield from src/app/icon.svg on a 24px grid, wearing an agent visor.
+const SHIELD =
+  "M5 5.3Q5 4 6.3 4H17.7Q19 4 19 5.3V12C19 16.5 16 19.1 12 20.6C8 19.1 5 16.5 5 12Z";
+const SHIELD_RIGHT = "M12 4H17.7Q19 4 19 5.3V12C19 16.5 16 19.1 12 20.6Z";
+
+function AgentMark() {
+  return (
+    <svg viewBox="0 0 24 24" width={18} height={18} aria-hidden="true">
+      <path d={SHIELD_RIGHT} fill="currentColor" opacity={0.25} />
+      <path
+        d={SHIELD}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+      />
+      <rect x={8} y={9.5} width={8} height={4} rx={2} fill="currentColor" />
+      <circle cx={10.3} cy={11.5} r={0.85} className="fill-background" />
+      <circle cx={13.7} cy={11.5} r={0.85} className="fill-background" />
+      <path
+        d="M12 1.2V2.8M11.2 2H12.8"
+        stroke="currentColor"
+        strokeWidth={1.2}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export function IntentStudio({ onClose }: { onClose?: () => void }) {
   const { accountState, busy, clearThread, messages } = useWallet();
@@ -21,7 +50,7 @@ export function IntentStudio({ onClose }: { onClose?: () => void }) {
       <header className="flex h-14 min-h-14 shrink-0 items-center justify-between gap-1.5 border-b pr-3 pl-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg border bg-primary/10 text-primary">
-            <Bot size={16} aria-hidden />
+            <AgentMark />
           </span>
           <div className="min-w-0">
             <h2 className="whitespace-nowrap text-xs font-semibold">
