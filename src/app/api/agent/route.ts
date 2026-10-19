@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth/accountStore";
 import { belongsToAccount, withAccount } from "@/lib/auth/context";
 import { guardStatus, portfolio } from "@/lib/chain";
+import { payeeKey } from "@/lib/security/policyEngine";
 import {
   exclusive,
   ledger,
@@ -48,6 +49,24 @@ const policySchema = z.object({
       monthlyExpensesUsd: z.number().positive().max(1e8),
       minRunwayMonths: z.number().min(0).max(120),
     })
+    .optional(),
+  // Strict EIP-55: a mixed-case address with one altered character is refused.
+  payees: z
+    .array(
+      z.object({
+        name: z
+          .string()
+          .trim()
+          .max(80)
+          .refine((name) => payeeKey(name) !== "", {
+            message: "Vendor name needs at least three identifying characters",
+          }),
+        address: z.string().trim().refine(isAddress, {
+          message: "Invalid or mis-checksummed address",
+        }),
+      }),
+    )
+    .max(50)
     .optional(),
 });
 

@@ -7,6 +7,10 @@ import {
   ExternalLink,
   Info,
 } from "@/components/wallet/icons";
+import type { InvoiceRead } from "@/lib/agent/invoice";
+import type { PayeeVerdict, Tier } from "@/lib/security/policyEngine";
+import { InvoiceReadout, type InvoiceView } from "./invoice-views";
+import { MarkdownText } from "./markdown-text";
 import {
   EXPLORER,
   formatUsd,
@@ -24,10 +28,16 @@ export type Reply = {
   txHash?: string;
   note?: string;
   steps?: Reply[];
+  invoice?: InvoiceView;
 };
 
 type Execution = {
-  decision: { tier: string; reasons: string[]; riskScore: number };
+  decision: {
+    tier: string;
+    reasons: string[];
+    riskScore: number;
+    payee?: PayeeVerdict;
+  };
   usd: number;
   gasEstimate: string;
   error: string;
@@ -35,6 +45,7 @@ type Execution = {
   txHash?: string;
   status?: string;
 };
+type InvoicePayment = Execution & { invoice: InvoiceRead };
 type Audit = {
   address: string;
   contract: boolean;
@@ -77,13 +88,35 @@ function describeBlock(x: Execution): Reply {
   const reasons = x.decision.reasons.join("; ");
   const cause = x.error && x.error !== PRE_RPC ? x.error : "";
   const shortfall = cause.startsWith("Insufficient ");
+  const injected = x.decision.reasons.includes(
+    "Adversarial instruction with unverified recipient",
+  );
   return {
     tone: "error",
     title: "Blocked. Nothing was signed.",
     detail:
       cause && !reasons.includes(cause) ? `${reasons}. ${cause}` : reasons,
     facts: executionFacts(x),
-    note: shortfall ? "Fund the wallet or try a smaller amount." : undefined,
+    note: shortfall
+      ? "Fund the wallet or try a smaller amount."
+      : injected
+        ? "The text contains instructions aimed at the agent. Aegis treats text as data, never as commands."
+        : undefined,
+  };
+}
+
+// The readout shows what was read and verified; a mismatch gets its own plain verdict.
+function describeInvoice(x: InvoicePayment): Reply {
+  const reply = describeExecution(x);
+  const payee = x.decision.payee;
+  const invoice = { ...x.invoice, payee, tier: x.decision.tier as Tier };
+  if (payee?.status !== "mismatch") return { ...reply, invoice };
+  return {
+    ...reply,
+    invoice,
+    title: `Blocked: not ${payee.payee.name}'s registered address`,
+    detail:
+      "Possible invoice fraud, so nothing was signed. A vendor's payment address changes only through a PIN-confirmed vendor-book update, never through an invoice, and approval cannot override this block.",
   };
 }
 
@@ -189,6 +222,8 @@ function describePlan(plan: Plan): Reply {
 export function describeResult(result: unknown): Reply {
   if (isObject(result)) {
     if (Array.isArray(result.results)) return describePlan(result as Plan);
+    if (isObject(result.decision) && isObject(result.invoice))
+      return describeInvoice(result as InvoicePayment);
     if (isObject(result.decision))
       return describeExecution(result as Execution);
     if (isObject(result.balances)) {
@@ -232,7 +267,14 @@ export function AgentReply({ reply, raw }: { reply: Reply; raw?: unknown }) {
         <Icon size={15} />
         {reply.title}
       </p>
-      {reply.detail && <p className="agent-reply-detail">{reply.detail}</p>}
+      {reply.invoice && <InvoiceReadout invoice={reply.invoice} />}
+      {/* Planner answers arrive as Markdown; deterministic details are plain
+          sentences and render unchanged. */}
+      {reply.detail && (
+        <div className="agent-reply-detail">
+          <MarkdownText text={reply.detail} />
+        </div>
+      )}
       {reply.facts && reply.facts.length > 0 && (
         <dl className="agent-reply-facts">
           {reply.facts.map(([label, value], index) => (

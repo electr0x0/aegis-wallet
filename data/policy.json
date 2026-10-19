@@ -15,5 +15,15 @@
     "fiatReserveUsd": 8990,
     "monthlyExpensesUsd": 3000,
     "minRunwayMonths": 3
-  }
+  },
+  "payees": [
+    {
+      "name": "Northwind Cloud Ltd",
+      "address": "0x48dEA0E20183257aaCf0784385C92d56DD2a5Bd5"
+    },
+    {
+      "name": "Lumen Data Services",
+      "address": "0x88DFB817871BC015C3F576aD2e7b6caEc16b53B6"
+    }
+  ]
 }

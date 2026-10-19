@@ -8,7 +8,25 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsoleCard } from "./console-views";
-import type { Policy } from "@/lib/security/policyEngine";
+import type { Payee, Policy } from "@/lib/security/policyEngine";
+
+const formatPayees = (payees: Payee[] = []) =>
+  payees.map((p) => `${p.name}, ${p.address}`).join("\n");
+
+// "Name, 0x…" per line. The server validates each name and EIP-55 checksum.
+function parsePayees(text: string): Payee[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const comma = line.lastIndexOf(",");
+      return {
+        name: line.slice(0, Math.max(comma, 0)).trim(),
+        address: line.slice(comma + 1).trim(),
+      };
+    });
+}
 export function PolicyControls({
   policy,
   busy,
@@ -19,9 +37,11 @@ export function PolicyControls({
   save: (policy: Policy) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<Policy | null>(policy);
+  const [vendorBook, setVendorBook] = useState<string | null>(null);
   useEffect(() => {
     setDraft((current) => current || policy);
   }, [policy]);
+  const vendorText = vendorBook ?? formatPayees(draft?.payees);
   if (!draft)
     return (
       <div className="telemetry-body space-y-6">
@@ -61,7 +81,7 @@ export function PolicyControls({
       className="min-w-0"
       onSubmit={(event) => {
         event.preventDefault();
-        void save(draft);
+        void save({ ...draft, payees: parsePayees(vendorText) });
       }}
     >
       <ConsoleCard title="Permission guardrails">
@@ -147,6 +167,24 @@ export function PolicyControls({
               </p>
             </div>
           ))}
+          <div className="col-span-full">
+            <label htmlFor="vendor-book" className="text-xs font-medium">
+              Vendor book (verification of payee)
+            </label>
+            <Textarea
+              id="vendor-book"
+              rows={4}
+              value={vendorText}
+              placeholder="Northwind Cloud Ltd, 0x48dEA0E20183257aaCf0784385C92d56DD2a5Bd5"
+              onChange={(event) => setVendorBook(event.target.value)}
+              className="mt-3 min-h-24 font-mono text-[11px]"
+            />
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              One vendor per line: name, then its address. A payment whose
+              instruction names a vendor must go to that address; anything else
+              is blocked, and approval cannot override it.
+            </p>
+          </div>
           <div className="col-span-full flex items-center justify-between gap-4 rounded-lg border bg-muted/30 p-3.5">
             <div>
               <label

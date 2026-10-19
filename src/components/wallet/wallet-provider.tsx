@@ -105,12 +105,17 @@ function useWalletState() {
         response.headers?.get("content-type")?.includes("application/x-ndjson")
       ) {
         return await readExecutionStream(response, (event) => {
-          const previous = event.start ? [] : progressRef.current;
-          const stages = ["policy", "simulation", "broadcast"];
+          const stages = ["extraction", "policy", "simulation", "broadcast"];
+          const rank = (step: ExecutionProgress) => stages.indexOf(step.stage);
+          // A stage that starts over clears itself and later stages, never earlier ones:
+          // the policy check keeps the invoice reading that came before it.
+          const previous = event.start
+            ? progressRef.current.filter((s) => rank(s) < rank(event))
+            : progressRef.current;
           progressRef.current = [
             ...previous.filter((s) => s.stage !== event.stage),
             event,
-          ].sort((a, b) => stages.indexOf(a.stage) - stages.indexOf(b.stage));
+          ].sort((a, b) => rank(a) - rank(b));
           setProgress([...progressRef.current]);
         });
       }

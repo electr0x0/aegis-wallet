@@ -26,14 +26,28 @@ import {
 } from "@/components/godui/prompt-suggestions";
 import { PromptComposer } from "@/components/godui/prompt-composer";
 import { SpotlightCard } from "@/components/godui/spotlight-card";
+import { looksLikeInvoice } from "@/lib/agent/invoice";
 import { cn } from "@/lib/utils";
 import { ApprovalCard } from "./approval-card";
 import { AgentReply, describeError, describeResult } from "./agent-reply";
 import { TierBadge } from "./console-views";
 import { ExecutionSteps } from "./execution-steps";
+import { InvoiceInbox } from "./invoice-inbox";
+import { InvoiceDocument } from "./invoice-views";
 import { buildScenarios } from "./scenarios";
 import { useWallet } from "./wallet-provider";
 import type { AgentMessage } from "./types";
+
+// A pasted invoice reads as a document, not as a green chat bubble.
+const DOCUMENT_BUBBLE = "bg-transparent p-0 text-foreground shadow-none";
+
+function Intent({ text, reading }: { text: string; reading?: boolean }) {
+  return looksLikeInvoice(text) ? (
+    <InvoiceDocument text={text} reading={reading} />
+  ) : (
+    text
+  );
+}
 
 const SCENARIO_ICONS: Record<string, LucideIcon> = {
   portfolio: ScanSearch,
@@ -56,8 +70,11 @@ function Exchange({ message }: { message: AgentMessage }) {
           hour: "2-digit",
           minute: "2-digit",
         })}
+        contentClassName={
+          looksLikeInvoice(message.intent) ? DOCUMENT_BUBBLE : undefined
+        }
       >
-        {message.intent}
+        <Intent text={message.intent} />
       </ConversationMessage>
       <ConversationMessage role="assistant" name="Aegis" fullWidth>
         <ExecutionSteps steps={message.steps ?? []} />
@@ -92,6 +109,10 @@ export function AgentChat() {
     };
   });
   const vaultReason = scenarios.find((s) => s.id === "vault")?.disabledReason;
+  // The scanning beam runs until the reader reports or any later stage starts.
+  const reading = !progress.some(
+    (step) => step.stage !== "extraction" || step.status !== "running",
+  );
   const select = (suggestion: PromptSuggestion) => {
     const scenario = scenarios.find((s) => s.id === suggestion.id);
     if (scenario && !scenario.disabled && !busy && !sessionLocked)
@@ -145,8 +166,13 @@ export function AgentChat() {
         ))}
         {activeIntent && (
           <>
-            <ConversationMessage role="user">
-              {activeIntent}
+            <ConversationMessage
+              role="user"
+              contentClassName={
+                looksLikeInvoice(activeIntent) ? DOCUMENT_BUBBLE : undefined
+              }
+            >
+              <Intent text={activeIntent} reading={reading} />
             </ConversationMessage>
             <ConversationMessage role="assistant" name="Aegis" fullWidth>
               <p className="text-xs text-muted-foreground">
@@ -199,10 +225,16 @@ export function AgentChat() {
             </CollapsibleTrigger>
           </div>
           <CollapsibleContent>
+            <div className="pt-2">
+              <InvoiceInbox
+                disabled={busy || sessionLocked}
+                onSubmit={(text) => void send(text)}
+              />
+            </div>
             <fieldset
               disabled={busy || sessionLocked}
               aria-label="Quick scenarios"
-              className="min-w-0 pt-2"
+              className="min-w-0"
             >
               <PromptSuggestions
                 variant="list"

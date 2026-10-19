@@ -2,9 +2,10 @@
 import type { ExecutionProgress } from "@/lib/agent/progress";
 import { AgentStep, AgentTimeline } from "@/components/godui/agent-timeline";
 const labels = {
-  policy: "1. Policy Check",
-  simulation: "2. EVM Simulation",
-  broadcast: "3. Base Sepolia Broadcast",
+  extraction: "AI Invoice Reading",
+  policy: "Policy Check",
+  simulation: "EVM Simulation",
+  broadcast: "Base Sepolia Broadcast",
 };
 export function ExecutionSteps({ steps }: { steps: ExecutionProgress[] }) {
   if (!steps.length) return null;
@@ -13,7 +14,11 @@ export function ExecutionSteps({ steps }: { steps: ExecutionProgress[] }) {
       {steps.map((step, index) => (
         <AgentStep
           key={step.stage}
-          title={<span className="text-xs">{labels[step.stage]}</span>}
+          title={
+            <span className="text-xs">
+              {index + 1}. {labels[step.stage]}
+            </span>
+          }
           status={
             step.status === "failed"
               ? "error"

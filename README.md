@@ -9,6 +9,8 @@ It treats the model as a financial participant working under a mandate, not as a
 - **Holding.** The funds sit in AgentGuard, a small on-chain contract. The agent holds only an expiring session key, limited by per-asset caps, recipient and call allowlists, and owner-signed approvals. These limits hold even if the model, the agent logic or the session key is compromised.
 - **Recording.** Every decision goes into a hash-chained ledger signed by the agent key, with a rationale a person can read.
 
+New to terms such as session key, simulation or EIP-191? The [glossary](docs/01_TECHNICAL_DOCUMENTATION.md#glossary) explains each in a sentence.
+
 ## For judges: verify in 3 minutes
 
 No step needs a private key or a funded wallet.
@@ -24,25 +26,28 @@ No step needs a private key or a funded wallet.
 
 ![AegisWallet operator console](docs/screenshots/console-workspace.png)
 
-| Layer                                                 | Enforces                                                                                                                                                                                                                                                                                                      |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Policy engine (`src/lib/security/policyEngine.ts`) | Tier 0 read, Tier 1 autonomous within caps, Tier 2 human in the loop, or blocked. Checks whitelist and blacklist, single-transaction and rolling 24-hour USD caps, gas ceiling, prompt-injection heuristics, and a reserve-runway floor computed from an operator-entered fiat profile (not a live bank feed) |
-| 2. Pre-flight simulation                              | `eth_call` and `estimateGas` from the address that holds the funds, on chain 84532 only                                                                                                                                                                                                                       |
-| 3. AgentGuard (`contracts/AgentGuard.sol`)            | Session expiry, per-asset per-transaction and per-UTC-day caps, target, recipient and selector allowlists (the session key cannot `approve`), and Tier 2 approvals as owner EIP-191 signatures verified on-chain with a nonce and deadline                                                                    |
+| Layer                                                 | Enforces                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Policy engine (`src/lib/security/policyEngine.ts`) | Tier 0 read, Tier 1 autonomous within caps, Tier 2 human in the loop, or blocked. Checks whitelist and blacklist, single-transaction and rolling 24-hour USD caps, gas ceiling, prompt-injection heuristics, verification of payee against the vendor book, and a reserve-runway floor computed from an operator-entered fiat profile (not a live bank feed) |
+| 2. Pre-flight simulation                              | `eth_call` and `estimateGas` from the address that holds the funds, on chain 84532 only                                                                                                                                                                                                                                                                      |
+| 3. AgentGuard (`contracts/AgentGuard.sol`)            | Session expiry, per-asset per-transaction and per-UTC-day caps, target, recipient and selector allowlists (the session key cannot `approve`), and Tier 2 approvals as owner EIP-191 signatures verified on-chain with a nonce and deadline                                                                                                                   |
+
+### Paying invoices: the AI does the clerk's work, code checks the payee
+
+Finance teams still key invoices into payments by hand, and the costliest payment fraud is the invoice that says "our bank details have changed". In Intent Studio, **Pay an invoice** opens an inbox: pick a sample or paste your own invoice.
+
+1. **The model reads it.** It extracts the vendor, invoice number, due date, total and pay-to address under a strict schema. The reader is named in the reply. With no model configured, a deterministic parser reads the labelled fields.
+2. **Code checks the reading.** Every amount, address and vendor name the model returns must be written in the invoice, so the model may misread but may not add. A mixed-case address with a failed EIP-55 checksum is refused.
+3. **The policy verifies the payee.** The vendor book in the policy maps each vendor to one address. An instruction that names a vendor but pays any other address is blocked, and approval cannot override it. This is the same check EU banks have had to offer since 9 October 2025 (Regulation (EU) 2024/886). The reply marks every character that differs from the registered address, so an address-poisoning lookalike is obvious at a glance.
+4. **A human approves.** A verified vendor that is not whitelisted is a Tier 2 payment: the agent prepares it and a person signs it off (maker-checker). In guard mode, AgentGuard verifies the owner signature on-chain.
+
+An invoice that carries instructions for the agent ("ignore previous instructions…") is blocked before any model reads it. Details: [docs/01, section 3.4](docs/01_TECHNICAL_DOCUMENTATION.md#34-invoice-payments-and-verification-of-payee); risks R23 and R24 in [docs/05](docs/05_SECURITY_SELF_ASSESSMENT.md#3-known-risk-list).
 
 The ledger head (last entry hash, entry count, policy hash) can be anchored on EAS by the operator. This is a fixed, zero-value call sent from the agent EOA through `executeAction`; it is never a planner tool.
 
 AgentGuard is not an ERC-4337 account. There is no EntryPoint, bundler or paymaster; the session key pays its own gas. Details are in [docs/01](docs/01_TECHNICAL_DOCUMENTATION.md). Risks and limitations are in [docs/05](docs/05_SECURITY_SELF_ASSESSMENT.md).
 
 ## Quickstart
-
-The navbar starts on **Master Demo Treasury (Pre-Funded)**, bound to `AGENT_PRIVATE_KEY`. The name is a demo preset: its balances and guard session are always read from Base Sepolia. The master operator PIN is **884210**, available through the demo quick-fill button. `HSM_ENV_ISOLATED` is a compatibility status for an environment-held software key; this prototype does not use a hardware HSM.
-
-Use **Provision New Agent Wallet** to create a PIN-encrypted EOA. Conservative, Balanced and Aggressive presets set $1/$2/$10 single-transfer caps and $5/$10/$50 daily caps, respectively, without changing the master policy. Switching accounts requires that account's PIN. An unlocked account session expires after 30 minutes or a server restart. The default local master remains available when no session cookie is present.
-
-New accounts receive a one-time attempt to fund 0.0003 ETH from the master EOA when its balance is strictly above 0.002 ETH. The transfer still must pass the master policy, remaining daily budget, chain check and simulation. This gas drip does not include USDC. Skips, blocks and unresolved outcomes are shown with a manual-funding address; nothing is retried automatically. The existing master guard protects only its own holder funds; newly provisioned wallets use EOA mode and are labeled accordingly.
-
-Every Tier 2 approval and policy save requires a fresh operator PIN. The demo quick-fill applies only to the master; custom wallets use their chosen PIN. Five failed attempts lock an account for five minutes, and successful/failed checks are recorded in the sealed audit trail. Accounts, encryption salt, account policies and audit history are private local state in `data/`; keep them together in private backups. See [the security assessment](docs/05_SECURITY_SELF_ASSESSMENT.md) for the limits of six-digit PIN protection.
 
 Requires a current Node.js release (developed on Node 24) and pnpm 11. `packageManager` pins pnpm 11.25.0, and `pnpm-lock.yaml` is the only lockfile.
 
@@ -83,24 +88,36 @@ pnpm setup-wallets
 
 No fake balances or transaction hashes are ever generated. An unfunded checkout shows no on-chain evidence.
 
+### Accounts and PINs
+
+The navbar starts on **Master Demo Treasury (Pre-Funded)**, bound to `AGENT_PRIVATE_KEY`. The name is a demo preset: its balances and guard session are always read from Base Sepolia. The master operator PIN is **884210**, available through the demo quick-fill button. The master's key status label, `HSM_ENV_ISOLATED`, only means the key is loaded from the server environment. There is no hardware security module.
+
+Use **Provision New Agent Wallet** to create a PIN-encrypted EOA. Conservative, Balanced and Aggressive presets set $1/$2/$10 single-transfer caps and $5/$10/$50 daily caps, respectively, without changing the master policy. Switching accounts requires that account's PIN. An unlocked account session expires after 30 minutes or a server restart. The default local master remains available when no session cookie is present.
+
+New accounts receive a one-time attempt to fund 0.0003 ETH from the master EOA when its balance is strictly above 0.002 ETH. The transfer still must pass the master policy, remaining daily budget, chain check and simulation. This gas drip does not include USDC. Skips, blocks and unresolved outcomes are shown with a manual-funding address; nothing is retried automatically. The existing master guard protects only its own holder funds; newly provisioned wallets use EOA mode and are labeled accordingly.
+
+Every Tier 2 approval and policy save requires a fresh operator PIN. The demo quick-fill applies only to the master; custom wallets use their chosen PIN. Five failed attempts lock an account for five minutes, and successful/failed checks are recorded in the sealed audit trail. Accounts, encryption salt, account policies and audit history are private local state in `data/`; keep them together in private backups. See [the security assessment](docs/05_SECURITY_SELF_ASSESSMENT.md) for the limits of six-digit PIN protection.
+
 ## Environment variables
 
 `.env.example` lists every variable. `.env.local` is git-ignored and must never be committed.
 
-| Variable               | Required                                     | Purpose                                                                                                                                      |
-| ---------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AGENT_PRIVATE_KEY`    | Yes (created by `setup-wallets`)             | Agent EOA. Signs transactions, is the guard's session key, pays gas, and signs ledger entries                                                |
-| `VAULT_ADDRESS`        | Yes (created by `setup-wallets`)             | Savings vault. Whitelisted off-chain, and the only allowed recipient on the guard. The default destination for "send … to the savings vault" |
-| `VAULT_PRIVATE_KEY`    | For guard mode (created by `setup-wallets`)  | AgentGuard owner key; signs Tier 2 approvals. In this prototype it sits beside the agent key (see docs/05, R2)                               |
-| `GUARD_ADDRESS`        | Optional (written by `guard:deploy`)         | Enables guard mode. An invalid value is a hard error, never a silent fallback                                                                |
-| `SESSION_HOURS`        | Optional, default `24`                       | Session-key lifetime used by `guard:deploy` and `--renew`                                                                                    |
-| `BASE_SEPOLIA_RPC_URL` | Optional, default `https://sepolia.base.org` | RPC endpoint                                                                                                                                 |
-| `GEMINI_API_KEY`       | Optional                                     | Enables the LLM planner through Gemini's OpenAI-compatible endpoint                                                                          |
-| `GEMINI_MODEL`         | Optional, default `gemini-3.5-flash-lite`    | Planner model                                                                                                                                |
-| `OPENAI_API_KEY`       | Optional                                     | Used only when `GEMINI_API_KEY` is not set                                                                                                   |
-| `OPENAI_MODEL`         | Optional, default `gpt-4.1-mini`             | Planner model for OpenAI                                                                                                                     |
+| Variable               | Required                                                 | Purpose                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_PRIVATE_KEY`    | Yes (created by `setup-wallets`)                         | Agent EOA. Signs transactions, is the guard's session key, pays gas, and signs ledger entries                                                |
+| `VAULT_ADDRESS`        | Yes (created by `setup-wallets`)                         | Savings vault. Whitelisted off-chain, and the only allowed recipient on the guard. The default destination for "send … to the savings vault" |
+| `VAULT_PRIVATE_KEY`    | For guard mode (created by `setup-wallets`)              | AgentGuard owner key; signs Tier 2 approvals. In this prototype it sits beside the agent key (see docs/05, R2)                               |
+| `GUARD_ADDRESS`        | Optional (written by `guard:deploy`)                     | Enables guard mode. An invalid value is a hard error, never a silent fallback                                                                |
+| `SESSION_HOURS`        | Optional, default `24`                                   | Session-key lifetime used by `guard:deploy` and `--renew`                                                                                    |
+| `BASE_SEPOLIA_RPC_URL` | Optional, default `https://sepolia.base.org`             | RPC endpoint                                                                                                                                 |
+| `DEEPSEEK_API_KEY`     | Optional                                                 | Primary LLM provider for the planner and the invoice reader                                                                                  |
+| `DEEPSEEK_MODEL`       | Optional, default `deepseek-flash` (DeepSeek-V4.1-Flash) | DeepSeek model                                                                                                                               |
+| `GEMINI_API_KEY`       | Optional                                                 | Fallback provider through Gemini's OpenAI-compatible endpoint, tried when the DeepSeek request fails                                         |
+| `GEMINI_MODEL`         | Optional, default `gemini-3.5-flash-lite`                | Gemini model                                                                                                                                 |
+| `OPENAI_API_KEY`       | Optional                                                 | Last fallback, after DeepSeek and Gemini                                                                                                     |
+| `OPENAI_MODEL`         | Optional, default `gpt-4.1-mini`                         | Planner model for OpenAI                                                                                                                     |
 
-The five dashboard scenarios, single wraps and transfers, portfolio reads and address audits all work without an LLM key.
+The five dashboard scenarios, single wraps and transfers, portfolio reads, address audits and the invoice inbox all work without an LLM key; without one, the deterministic parser reads invoices.
 
 ## Commands
 

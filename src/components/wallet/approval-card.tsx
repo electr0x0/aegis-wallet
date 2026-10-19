@@ -3,10 +3,14 @@
 import { useState } from "react";
 import {
   AlertTriangle,
+  BadgeCheck,
   LockKeyhole,
+  ReceiptText,
   ShieldCheck,
   ArrowUpRight,
 } from "@/components/wallet/icons";
+import { looksLikeInvoice, parseInvoice } from "@/lib/agent/invoice";
+import type { PayeeVerdict } from "@/lib/security/policyEngine";
 import { HoldConfirmButton } from "@/components/godui/hold-confirm-button";
 import { SpotlightCard } from "@/components/godui/spotlight-card";
 import { Button } from "@/components/ui/button";
@@ -31,10 +35,20 @@ type FactsProps = {
 function RecipientStatus({
   recipient,
   whitelist,
+  payee,
 }: {
   recipient: string;
   whitelist?: string[];
+  payee?: PayeeVerdict;
 }) {
+  if (payee?.status === "verified") {
+    return (
+      <span className="mt-1.5 flex items-center gap-1.5 text-xs text-[var(--emerald)]">
+        <BadgeCheck size={13} /> Verified payee: {payee.payee.name} (vendor
+        book)
+      </span>
+    );
+  }
   if (!whitelist) return null;
   const known = whitelist.some(
     (address) => address.toLowerCase() === recipient.toLowerCase(),
@@ -62,8 +76,27 @@ function signingNote(guarded: boolean) {
 // Shared by the card and the review dialog so both show the same evidence.
 function ProposalFacts({ proposal, whitelist, guarded }: FactsProps) {
   const { action, decision } = proposal;
+  // Display only, from the stored operator prompt: the approver sees which document asked.
+  const invoice = looksLikeInvoice(action.prompt)
+    ? parseInvoice(action.prompt)
+    : null;
   return (
     <dl className="grid min-w-0 gap-3 text-xs [&_dt]:mb-1 [&_dt]:text-[10px] [&_dt]:text-muted-foreground [&_dd]:[overflow-wrap:anywhere]">
+      {invoice && (
+        <div>
+          <dt>Source document</dt>
+          <dd className="flex items-center gap-1.5">
+            <ReceiptText size={13} className="shrink-0" />
+            {[
+              invoice.invoiceNumber
+                ? `Invoice ${invoice.invoiceNumber}`
+                : "Invoice",
+              `from ${invoice.vendor || "an unnamed vendor"}`,
+            ].join(" ")}
+            {invoice.dueDate ? `, due ${invoice.dueDate}` : ""}
+          </dd>
+        </div>
+      )}
       <div>
         <dt>Amount</dt>
         <dd>
@@ -79,7 +112,11 @@ function ProposalFacts({ proposal, whitelist, guarded }: FactsProps) {
           <span className="block break-all font-mono text-xs">
             {action.recipient}
           </span>
-          <RecipientStatus recipient={action.recipient} whitelist={whitelist} />
+          <RecipientStatus
+            recipient={action.recipient}
+            whitelist={whitelist}
+            payee={decision.payee}
+          />
         </dd>
       </div>
       <div>

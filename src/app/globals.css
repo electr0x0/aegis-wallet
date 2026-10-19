@@ -250,6 +250,33 @@
   line-height: 1.6;
   color: #3d4642;
 }
+.agent-reply-detail > * + * {
+  margin-top: 8px;
+}
+.agent-reply-detail ol,
+.agent-reply-detail ul {
+  padding-left: 20px;
+}
+.agent-reply-detail ol {
+  list-style: decimal;
+}
+.agent-reply-detail ul {
+  list-style: disc;
+}
+.agent-reply-detail li + li {
+  margin-top: 4px;
+}
+.agent-reply-detail strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+.agent-reply-detail code {
+  border-radius: 4px;
+  background: var(--muted);
+  padding: 1px 5px;
+  font: 12px/1.5 var(--font-mono);
+  overflow-wrap: anywhere;
+}
 .agent-reply-facts {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -300,4 +327,197 @@
   overflow-wrap: anywhere;
   color: #3d4642;
   font: 11px/1.7 var(--font-mono);
+}
+
+/* Invoice clerk: the operator's document, the agent's readout and the payee check. */
+.invoice-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+.invoice-option:hover {
+  border-color: var(--input);
+}
+.invoice-option[data-checked="true"] {
+  border-color: var(--ink);
+  background: var(--surface);
+}
+.invoice-paper {
+  min-height: 340px;
+  padding: 18px 20px;
+  border-color: var(--input);
+  background: #ffffff;
+  box-shadow: var(--shadow-panel);
+  font: 12px/1.65 var(--font-mono);
+  color: var(--ink);
+}
+.invoice-document {
+  position: relative;
+  width: min(100%, 340px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 12px;
+  box-shadow: var(--shadow-panel);
+  text-align: left;
+  white-space: normal;
+}
+.invoice-document .app-icon {
+  color: var(--slate);
+}
+.invoice-document-text summary {
+  width: fit-content;
+  margin-top: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.invoice-document-text summary:hover {
+  color: var(--ink);
+}
+.invoice-document-text pre {
+  max-height: 260px;
+  margin-top: 8px;
+  overflow: auto;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+  font: 10.5px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #3d4642;
+}
+.invoice-readout {
+  max-width: 68ch;
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+}
+.invoice-readout-reader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 7px 12px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.invoice-readout-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 12px 12px 0;
+}
+.invoice-readout-vendor {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.invoice-readout-total {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.invoice-readout-total span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.invoice-readout-payto {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.invoice-readout-payto code {
+  font: 11.5px/1.5 var(--font-mono);
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+.invoice-checks {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding: 10px 12px 12px;
+}
+.invoice-checks li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #3d4642;
+}
+.invoice-checks li > .app-icon {
+  margin-top: 2px;
+}
+.invoice-checks li[data-tone="success"] > .app-icon {
+  color: var(--emerald);
+}
+.invoice-checks li[data-tone="pending"] > .app-icon {
+  color: var(--amber);
+}
+.invoice-checks li[data-tone="error"] {
+  color: var(--ink);
+}
+.invoice-checks li[data-tone="error"] > .app-icon {
+  color: var(--red);
+}
+.address-comparison {
+  margin-top: 10px;
+  border: 1px solid var(--red-line);
+  border-radius: 8px;
+  background: var(--red-tint);
+  padding: 10px 12px;
+}
+.address-comparison dl {
+  display: grid;
+  gap: 8px;
+}
+.address-comparison dt {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.address-comparison p {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #3d4642;
+}
+/* A proofreader's mark: every character that differs from the registered address. */
+.address-diff {
+  display: block;
+  font: 12.5px/1.7 var(--font-mono);
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+.address-diff mark {
+  background: transparent;
+  color: var(--red);
+  text-decoration: underline wavy var(--red);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.address-diff[data-variant="registered"] mark {
+  border-radius: 2px;
+  background: var(--emerald-tint);
+  color: var(--emerald-strong);
+  text-decoration: none;
 }

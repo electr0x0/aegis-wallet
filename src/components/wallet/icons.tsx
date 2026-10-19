@@ -5,6 +5,7 @@ import {
   Activity as ActivityIcon,
   ArrowDownUp as ArrowDownUpIcon,
   ArrowUpRight as ArrowUpRightIcon,
+  BadgeCheck as BadgeCheckIcon,
   BotMessageSquare,
   Check as CheckIcon,
   Clock as ClockIcon,
@@ -16,8 +17,10 @@ import {
   LockKeyhole as LockKeyholeIcon,
   Maximize2,
   PanelLeft as PanelLeftIcon,
+  ReceiptText as ReceiptTextIcon,
   RefreshCw as RefreshCwIcon,
   ScanLine as ScanLineIcon,
+  ScanText as ScanTextIcon,
   ScrollText as ScrollTextIcon,
   ShieldAlert as ShieldAlertIcon,
   ShieldCheck as ShieldCheckIcon,
@@ -79,3 +82,6 @@ export const AlertTriangle = icon(TriangleAlert);
 export const Clock = icon(ClockIcon);
 export const MessageSquare = icon(BotMessageSquare);
 export const Expand = icon(Maximize2);
+export const BadgeCheck = icon(BadgeCheckIcon);
+export const ReceiptText = icon(ReceiptTextIcon);
+export const ScanText = icon(ScanTextIcon);

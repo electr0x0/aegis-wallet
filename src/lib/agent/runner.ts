@@ -1,5 +1,14 @@
+import { isAddress } from "viem";
 import { WETH } from "../chain";
 import { ADVERSARIAL, type Action } from "../security/policyEngine";
+import {
+  looksLikeInvoice,
+  readInvoice,
+  ungroundedField,
+  writtenAddress,
+  type Provider,
+} from "./invoice";
+import { reportProgress } from "./progress";
 import {
   audit_contract_address,
   execute_eth_weth_rebalance,
@@ -11,7 +20,6 @@ type Token = Action["token"];
 type ToolArgs = Record<string, unknown>;
 type ToolCall = { id: string; function: { name: string; arguments: string } };
 type AssistantMessage = { content?: string | null; tool_calls?: ToolCall[] };
-type Provider = { url: string; key: string; model: string };
 
 const MAX_PLANNER_ROUNDS = 5;
 const MAX_TOOL_CALLS = 4;
@@ -47,6 +55,9 @@ const MULTI_STEP =
   /\bthen\b|\band (?:transfer|send|wrap|unwrap|rebalance|analyze)\b/i;
 const TRANSFER_VERB = /\b(?:send|transfer|pay)/i;
 const UNSUPPORTED = /\b(?:swap|yield|stak|bridg)/i;
+// A swap worded without "swap": "convert my USDC to ETH". ETH to WETH is a 1:1 wrap and passes.
+const CONVERSION_VERB = /\b(?:convert|exchange|trade|sell|buy)\b/i;
+const USDC_AND_ETH = /\busdc\b[\s\S]*\bw?eth\b|\bw?eth\b[\s\S]*\busdc\b/i;
 const UNSUPPORTED_MESSAGE =
   "Swaps and yield deposits are not supported: no slippage-safe route exists on this testnet deployment.";
 
@@ -127,7 +138,10 @@ export async function runIntent(prompt: string) {
     );
   }
   // Refuse before any parsing, so the planner can't reinterpret a swap as a transfer.
-  if (UNSUPPORTED.test(prompt)) throw new Error(UNSUPPORTED_MESSAGE);
+  if (UNSUPPORTED.test(prompt) || asksForConversion(prompt)) {
+    throw new Error(UNSUPPORTED_MESSAGE);
+  }
+  if (looksLikeInvoice(prompt)) return payInvoice(prompt);
 
   const multiStep = MULTI_STEP.test(prompt);
   if (amount && !multiStep && !NEGATED.test(prompt)) {
@@ -165,6 +179,10 @@ function asksForSecret(prompt: string): boolean {
   );
 }
 
+function asksForConversion(prompt: string): boolean {
+  return CONVERSION_VERB.test(prompt) && USDC_AND_ETH.test(prompt);
+}
+
 // Deterministic demo parser. Returns null when the prompt is not a single wrap or transfer.
 function parseSingleAction(
   prompt: string,
@@ -192,25 +210,98 @@ function parseSingleAction(
   return { ...base, kind: "transfer_token", recipient };
 }
 
-function plannerProvider(): Provider {
+// Accounts payable: the model reads the invoice, code checks every field it returns
+// against the document, and the transfer then goes through the same policy gate.
+async function payInvoice(prompt: string) {
+  const providers = configuredProviders();
+  const [first] = providers;
+  reportProgress({
+    stage: "extraction",
+    status: "running",
+    message: first
+      ? `${first.name} (${first.model}) is reading the invoice. It extracts fields only; it cannot sign or approve.`
+      : "No model configured. The deterministic parser is reading the labelled fields.",
+    start: true,
+  });
+  const failed = (message: string) =>
+    reportProgress({ stage: "extraction", status: "failed", message });
+  const refuse = (reason: string) => {
+    failed(reason);
+    return new Error(`Refused: ${reason}. Nothing was signed.`);
+  };
+  let invoice;
+  try {
+    invoice = await readInvoice(prompt, providers);
+  } catch (e) {
+    failed((e as Error).message);
+    throw e;
+  }
+  const ungrounded = ungroundedField(prompt, invoice);
+  if (ungrounded) {
+    throw refuse(
+      `the reader's output failed the document check: ${ungrounded}`,
+    );
+  }
+  const payTo = writtenAddress(prompt, invoice.payTo);
+  if (!isAddress(payTo)) {
+    throw refuse(
+      "the pay-to address fails its EIP-55 checksum, a sign of a mistyped or altered address",
+    );
+  }
+  reportProgress({
+    stage: "extraction",
+    status: "success",
+    message: `${invoice.reader} read ${invoice.amount} ${invoice.token} payable to ${invoice.vendor || "an unnamed vendor"}. The amount and the pay-to address were both found in the document.`,
+  });
+  const result = await executeAction({
+    kind: "transfer_token",
+    token: invoice.token,
+    amount: invoice.amount,
+    recipient: payTo,
+    prompt,
+  });
+  return { ...result, invoice: { ...invoice, payTo } };
+}
+
+// Fallback order: DeepSeek, then Gemini, then OpenAI, each only when its key is set.
+function configuredProviders(): Provider[] {
+  const providers: Provider[] = [];
+  const deepseek = process.env.DEEPSEEK_API_KEY;
+  if (deepseek) {
+    providers.push({
+      name: "DeepSeek",
+      url: "https://api.deepseek.com/chat/completions",
+      key: deepseek,
+      model: process.env.DEEPSEEK_MODEL || "deepseek-flash",
+      jsonObjectOnly: true,
+    });
+  }
   const gemini = process.env.GEMINI_API_KEY;
   if (gemini) {
-    return {
+    providers.push({
+      name: "Gemini",
       url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       key: gemini,
       model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
-    };
+    });
   }
   const openai = process.env.OPENAI_API_KEY;
   if (openai) {
-    return {
+    providers.push({
+      name: "OpenAI",
       url: "https://api.openai.com/v1/chat/completions",
       key: openai,
       model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-    };
+    });
   }
+  return providers;
+}
+
+function plannerProviders(): Provider[] {
+  const providers = configuredProviders();
+  if (providers.length) return providers;
   throw new Error(
-    "Use a demo intent or configure GEMINI_API_KEY (or OPENAI_API_KEY) for multi-step natural language planning.",
+    "Use a demo intent or configure DEEPSEEK_API_KEY (or GEMINI_API_KEY) for multi-step natural language planning.",
   );
 }
 
@@ -244,11 +335,29 @@ async function complete(
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) {
-    throw new Error(`Planner request failed (${response.status})`);
+    throw new Error(
+      `${provider.name} planner request failed (${response.status})`,
+    );
   }
   const message = (await response.json()).choices?.[0]?.message;
-  if (!message) throw new Error("Planner returned no message");
+  if (!message) throw new Error(`${provider.name} planner returned no message`);
   return message;
+}
+
+// The next provider is tried only when a request fails, never on a reply it dislikes.
+async function completeWithFallback(
+  providers: Provider[],
+  messages: unknown[],
+) {
+  let failure: unknown;
+  for (const provider of providers) {
+    try {
+      return { provider, message: await complete(provider, messages) };
+    } catch (e) {
+      failure = e;
+    }
+  }
+  throw failure;
 }
 
 async function runTool(name: string, args: ToolArgs, prompt: string) {
@@ -285,7 +394,7 @@ function haltingExecution(result: unknown) {
 
 // Exported for the offline attack suite, which drives it with a compromised mock model.
 export async function runPlanner(prompt: string) {
-  const provider = plannerProvider();
+  let providers = plannerProviders();
   const messages: unknown[] = [
     { role: "system", content: systemPrompt() },
     { role: "user", content: prompt },
@@ -293,8 +402,16 @@ export async function runPlanner(prompt: string) {
   const results: unknown[] = [];
 
   for (let round = 0; round < MAX_PLANNER_ROUNDS; round++) {
-    const message = await complete(provider, messages);
-    // Echo the message untouched: Gemini requires its tool-call thought_signature back.
+    const { provider, message } = await completeWithFallback(
+      providers,
+      messages,
+    );
+    // Fallback happens only before the first tool runs. After that the plan stays with
+    // the model that answered: no model continues another's tool calls, and tool
+    // results go to one provider only.
+    providers = [provider];
+    // Echo the message untouched: Gemini needs its thought_signature back, DeepSeek
+    // its reasoning_content.
     messages.push(message);
     if (!message.tool_calls?.length) {
       const summary = message.content ?? "";

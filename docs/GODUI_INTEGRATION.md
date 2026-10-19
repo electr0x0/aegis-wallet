@@ -55,6 +55,7 @@ Future additions use `pnpm dlx shadcn@4.22.1 add @godui/<name>` or `pnpm dlx sha
 | Recent events and execution progress    | Lab Agent Timeline / Agent Step with collapsible details                                             |
 | Reference portfolio total               | Lab Number Ticker, initialized at the actual returned value                                          |
 | Provisioning risk presets               | GodUI Radio Group and animated Radio Group Item                                                      |
+| Invoice inbox and invoice reading       | GodUI Dialog, Radio Group and Textarea; Border Beam (two-colour, emerald) while the model reads      |
 
 Core files are in `src/components/ui`, Lab files in `src/components/godui`, and application compositions in `src/components/wallet`. Shared GodUI motion hooks are in `src/hooks`.
 

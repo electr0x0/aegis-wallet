@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 export type ExecutionProgress = {
-  stage: "policy" | "simulation" | "broadcast";
+  stage: "extraction" | "policy" | "simulation" | "broadcast";
   status: "running" | "success" | "held" | "failed" | "submitted";
   message: string;
   txHash?: string;

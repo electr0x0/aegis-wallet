@@ -57,7 +57,7 @@ describe("Balance-aware console scenarios", () => {
       "Wrap 0.0002 ETH into WETH",
     );
     expect(scenarios.find((x) => x.id === "external")?.prompt).toContain(
-      "Send 0.005 ETH",
+      "Send 2 USDC",
     );
   });
 });

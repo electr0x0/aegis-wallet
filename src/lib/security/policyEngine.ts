@@ -41,6 +41,9 @@ export type Treasury = {
   minRunwayMonths: number;
 };
 
+// A vendor-book entry: the one address a registered vendor may be paid at.
+export type Payee = { name: string; address: string };
+
 export type Policy = {
   tier1SingleTxMaxUsd: number;
   tier1DailyLimitUsd: number;
@@ -49,6 +52,7 @@ export type Policy = {
   blacklistedAddresses: string[];
   requireApproval: boolean;
   treasury?: Treasury;
+  payees?: Payee[];
 };
 
 export type LedgerAnchor = {
@@ -78,11 +82,16 @@ export type AnchorCall = { to: string; value: bigint; schemaUid?: string };
 
 export type Tier = "TIER_0" | "TIER_1_AUTO" | "TIER_2_HITL" | "BLOCKED";
 
+export type PayeeVerdict =
+  | { status: "verified"; payee: Payee }
+  | { status: "mismatch"; payee: Payee; lookalike: boolean };
+
 export type Decision = {
   tier: Tier;
   reasons: string[];
   riskScore: number;
   runwayMonths?: number;
+  payee?: PayeeVerdict;
 };
 
 export type PolicyContext = {
@@ -104,6 +113,93 @@ function listed(list: string[], address: string): boolean {
 
 function block(reason: string): Decision {
   return { tier: "BLOCKED", reasons: [reason], riskScore: 100 };
+}
+
+// Legal-form words don't identify a vendor: "Northwind Cloud Ltd" and
+// "NORTHWIND CLOUD LIMITED" are the same payee.
+const LEGAL_FORMS = new Set([
+  "the",
+  "ltd",
+  "limited",
+  "llc",
+  "inc",
+  "incorporated",
+  "corp",
+  "corporation",
+  "co",
+  "company",
+  "plc",
+  "gmbh",
+  "ag",
+  "sa",
+  "bv",
+  "pte",
+  "pty",
+]);
+
+function words(text: string): string[] {
+  return text
+    .normalize("NFKC")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/** The identifying words of a vendor name, or "" when too short to match safely. */
+export function payeeKey(name: string): string {
+  const key = words(name)
+    .filter((word) => !LEGAL_FORMS.has(word))
+    .join(" ");
+  return key.length >= 3 ? key : "";
+}
+
+/** True when the name's identifying words appear in the text, whole and in order. */
+export function mentionsName(text: string, name: string): boolean {
+  const key = payeeKey(name);
+  return key !== "" && ` ${words(text).join(" ")} `.includes(` ${key} `);
+}
+
+// Address poisoning copies the characters a person checks: the first and the last few.
+function lookalike(registered: string, recipient: string): boolean {
+  const a = registered.toLowerCase();
+  const b = recipient.toLowerCase();
+  return (
+    a !== b && a.slice(0, 6) === b.slice(0, 6) && a.slice(-4) === b.slice(-4)
+  );
+}
+
+/**
+ * Verification of payee. When the operator's instruction (an invoice, say) names a
+ * registered vendor, the transfer must go to that vendor's registered address. It reads
+ * the stored prompt, never model output, so a misled model cannot argue past it.
+ */
+export function verifyPayee(
+  prompt: string,
+  recipient: string,
+  payees: Payee[] = [],
+): PayeeVerdict | undefined {
+  const named = payees.filter((payee) => mentionsName(prompt, payee.name));
+  const paidNamed = named.find((payee) => listed([payee.address], recipient));
+  if (named.length && !paidNamed) {
+    const payee =
+      named.find((p) => lookalike(p.address, recipient)) ?? named[0];
+    return {
+      status: "mismatch",
+      payee,
+      lookalike: lookalike(payee.address, recipient),
+    };
+  }
+  const payee = paidNamed ?? payees.find((p) => listed([p.address], recipient));
+  return payee ? { status: "verified", payee } : undefined;
+}
+
+function payeeMismatch(
+  verdict: Extract<PayeeVerdict, { status: "mismatch" }>,
+  recipient: string,
+): string {
+  const { name, address } = verdict.payee;
+  const lookalikeNote = verdict.lookalike ? " (a lookalike address)" : "";
+  return `Payee mismatch: ${name} is registered to ${address}, but this pays ${recipient}${lookalikeNote}`;
 }
 
 // Truncated, never rounded up, so a breach can't display as "3.0 months (floor 3)".
@@ -196,6 +292,14 @@ export function evaluateTransactionPolicy(
   if (action.kind === "read") {
     return { tier: "TIER_0", reasons: ["Read-only operation"], riskScore: 0 };
   }
+  // A changed payee needs a PIN-confirmed vendor-book update, never just an invoice.
+  const payee =
+    action.kind === "transfer_token"
+      ? verifyPayee(action.prompt, action.recipient, policy.payees)
+      : undefined;
+  if (payee?.status === "mismatch") {
+    return { ...block(payeeMismatch(payee, action.recipient)), payee };
+  }
   if (!Number.isFinite(context.usd) || context.usd <= 0) {
     return block("Invalid transaction value");
   }
@@ -209,7 +313,13 @@ export function evaluateTransactionPolicy(
 
   // Soft limits: any one of these routes the action to a human.
   const reasons: string[] = [];
-  if (!trusted) reasons.push("Recipient is not whitelisted");
+  if (!trusted) {
+    reasons.push(
+      payee
+        ? `Verified payee ${payee.payee.name}, not whitelisted for autonomous payment`
+        : "Recipient is not whitelisted",
+    );
+  }
   if (context.usd > policy.tier1SingleTxMaxUsd) {
     reasons.push("Single transaction limit exceeded");
   }
@@ -233,6 +343,7 @@ export function evaluateTransactionPolicy(
         riskScore: 10,
       };
   if (runway !== undefined) decision.runwayMonths = runway;
+  if (payee) decision.payee = payee;
   return decision;
 }
 
@@ -252,7 +363,7 @@ function trimAmount(amount: string): string {
   return amount.replace(/0+$/, "").replace(/\.$/, "");
 }
 
-function summarize(action: Action, usd: number): string {
+function summarize(action: Action, usd: number, decision: Decision): string {
   const amount = `${trimAmount(action.amount)} ${action.token}`;
   const value = Number.isFinite(usd) ? ` (~${dollars(usd)})` : "";
   if (action.kind === "read") return "read-only request";
@@ -266,7 +377,11 @@ function summarize(action: Action, usd: number): string {
     const count = action.anchor?.entryCount;
     return `anchor ledger head ${head} (${count} entries) on EAS (zero value)`;
   }
-  return `transfer ${amount} to ${action.recipient}${value}`;
+  const payee =
+    decision.payee?.status === "verified"
+      ? `${decision.payee.payee.name} (${action.recipient})`
+      : action.recipient;
+  return `transfer ${amount} to ${payee}${value}`;
 }
 
 function runwaySentence(decision: Decision, policy: Policy): string {
@@ -283,7 +398,7 @@ export function explainDecision(
   decision: Decision,
   ctx: ExplainContext,
 ): string {
-  const head = `${decision.tier}: ${summarize(action, ctx.usd)}.`;
+  const head = `${decision.tier}: ${summarize(action, ctx.usd, decision)}.`;
   const simulation = ctx.simulation
     ? " Pre-flight simulation passed."
     : " Pre-flight simulation failed.";

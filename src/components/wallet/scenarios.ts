@@ -67,9 +67,10 @@ export function buildScenarios(live?: LivePortfolio | null, policy?: Policy) {
     },
     {
       id: "external",
-      label: "Send 0.005 ETH to an external address",
+      label: "Send 2 USDC to an external address",
       tier: "TIER_2_HITL",
-      prompt: "Send 0.005 ETH to 0x71c7656ec7ab88b098defb751b7401b5f6d8976f",
+      prompt:
+        "Send 2 USDC to 0x71c7656ec7ab88b098defb751b7401b5f6d8976f for an investment",
     },
     {
       id: "security",
