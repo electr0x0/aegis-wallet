@@ -10,9 +10,6 @@ body {
   overflow: hidden;
   background: var(--background);
 }
-.app-shell [data-slot="sidebar-inner"] {
-  background: #fafafa;
-}
 .app-main {
   flex: 1;
   width: 0;

@@ -82,7 +82,7 @@ The sidebar is installed from `https://godui.design/r/sidebar.json`. It expands 
 
 Geist Sans and Geist Mono are bundled locally with `geist` and loaded through Next.js in the root layout, matching GodUI's brand-font instructions. Both the theme utility tokens and application CSS use the Geist variables.
 
-Existing application icons use per-icon imports from `@svg-animated-icons/react` ([library](https://svg-animated-icons.vercel.app/)). The `wallet/icons.tsx` adapter supplies sizing and decorative accessibility defaults. New console controls and account UI use Lucide in accordance with AGENTS.md. CSS disables icon animations for reduced-motion users. GodUI Lab's internal control glyphs remain part of the upstream component source.
+Application icons are [Lucide](https://lucide.dev) (`lucide-react`), as AGENTS.md requires. Wallet components import them through the `wallet/icons.tsx` adapter, which sets one 1.75 stroke weight and decorative `aria-hidden` defaults; console and account UI import `lucide-react` directly. Sidebar rows use 16px icons, the size the collapsed 32px rail is built for. The brand mark (`src/app/icon.svg`, also the favicon) is a shield split white and emerald; `app-sidebar.tsx` draws the same paths inline. The sidebar footer shows the live AgentGuard session state. The sidebar colour comes from the `--sidebar` token, which the sliding surface paints: never set a background on `sidebar-inner`, because the inner keeps its full width while the panel collapses and would snap instead of sliding. GodUI Lab's internal control glyphs remain part of the upstream component source.
 
 ## Validation
 

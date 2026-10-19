@@ -15,7 +15,6 @@
     "guard:attack": "tsx --env-file-if-exists=.env.local scripts/attack-demo.ts"
   },
   "dependencies": {
-    "@svg-animated-icons/react": "^0.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^14.3.0",

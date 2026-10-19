@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>AegisWallet</title>
+  <defs>
+    <path id="shield" d="M112 108Q112 80 140 80H372Q400 80 400 108V256C400 352 336 408 256 440C176 408 112 352 112 256Z"/>
+    <clipPath id="right-half">
+      <rect x="256" y="0" width="256" height="512"/>
+    </clipPath>
+  </defs>
+  <rect id="tile" width="512" height="512" rx="144" fill="#0d1210"/>
+  <g id="mark">
+    <use href="#shield" fill="#ffffff"/>
+    <use href="#shield" fill="#17a374" clip-path="url(#right-half)"/>
+  </g>
+</svg>

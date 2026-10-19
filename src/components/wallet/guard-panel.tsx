@@ -14,7 +14,7 @@ import {
   type LivePortfolio,
 } from "./types";
 
-function timeLeft(expirySeconds: number): string | null {
+export function timeLeft(expirySeconds: number): string | null {
   const seconds = expirySeconds - Date.now() / 1000;
   if (seconds <= 0) return null;
   const hours = Math.floor(seconds / 3600);
