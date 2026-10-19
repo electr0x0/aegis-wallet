@@ -213,6 +213,12 @@ function parseSingleAction(
 // Accounts payable: the model reads the invoice, code checks every field it returns
 // against the document, and the transfer then goes through the same policy gate.
 async function payInvoice(prompt: string) {
+  // As in the demo parser: "do not pay this invoice" is never read as an order to pay it.
+  if (NEGATED.test(prompt)) {
+    throw new Error(
+      "Not paid: the text says not to pay. Nothing was read or signed. Remove that line to pay this invoice.",
+    );
+  }
   const providers = configuredProviders();
   const [first] = providers;
   reportProgress({
@@ -253,13 +259,16 @@ async function payInvoice(prompt: string) {
     status: "success",
     message: `${invoice.reader} read ${invoice.amount} ${invoice.token} payable to ${invoice.vendor || "an unnamed vendor"}. The amount and the pay-to address were both found in the document.`,
   });
-  const result = await executeAction({
-    kind: "transfer_token",
-    token: invoice.token,
-    amount: invoice.amount,
-    recipient: payTo,
-    prompt,
-  });
+  const result = await executeAction(
+    {
+      kind: "transfer_token",
+      token: invoice.token,
+      amount: invoice.amount,
+      recipient: payTo,
+      prompt,
+    },
+    /simulate|dry.run/i.test(prompt),
+  );
   return { ...result, invoice: { ...invoice, payTo } };
 }
 
