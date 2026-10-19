@@ -20,6 +20,19 @@ import {
 } from "../chain";
 import { scanBytecode } from "../security/bytecode";
 import {
+  belongsToAccount,
+  currentAccount,
+  currentAccountId,
+} from "../auth/context";
+import {
+  claimDrip,
+  DripAlreadyClaimedError,
+  requireStepUp,
+  setDrip,
+  withMasterFunding,
+} from "../auth/accountStore";
+import type { PublicAccount } from "../auth/accountStore";
+import {
   evaluateTransactionPolicy,
   explainDecision,
   type Action,
@@ -47,7 +60,7 @@ const EIP1967_IMPLEMENTATION_SLOT =
 
 export const actionSchema = z.object({
   // Reads have their own tools; a "read" kind here would skip the write tiers.
-  kind: z.enum(["wrap_eth", "unwrap_weth", "transfer_token"]),
+  kind: z.enum(["wrap_eth", "unwrap_weth", "transfer_token", "fund_account"]),
   token: z.enum(["ETH", "WETH", "USDC"]),
   amount: z.string().regex(/^\d+(\.\d{1,18})?$/),
   recipient: z.string().refine(isAddress),
@@ -88,6 +101,7 @@ function autonomousSpendUsd(l: Ledger): number {
   for (const entry of l.logs) latest.set(entry.operationId ?? entry.id, entry);
   let total = 0;
   for (const entry of latest.values()) {
+    if (!belongsToAccount(entry)) continue;
     const recent = Date.now() - Date.parse(entry.timestamp) < DAY_MS;
     const reserved = RESERVED_STATUSES.includes(entry.status);
     if (entry.tier === "TIER_1_AUTO" && reserved && recent) total += entry.usd;
@@ -143,7 +157,8 @@ async function simulationFailure(a: Action, e: unknown): Promise<string> {
 }
 
 async function holdingsUsd(a: Action, p: Policy) {
-  if (a.kind !== "transfer_token" || !p.treasury) return undefined;
+  if (!["transfer_token", "fund_account"].includes(a.kind) || !p.treasury)
+    return undefined;
   return (await portfolio()).totalUsd;
 }
 
@@ -167,6 +182,7 @@ async function inspect(
   l: Ledger,
   p: Policy,
   approved: boolean,
+  onboardingRecipient?: string,
 ): Promise<Inspection> {
   const usd = referenceUsd(a);
   const spentUsd = autonomousSpendUsd(l);
@@ -203,6 +219,7 @@ async function inspect(
     spentUsd,
     gasGwei: 0,
     simulation: true,
+    onboardingRecipient,
   });
   if (early.tier === "BLOCKED") return finish(early, "0", "Blocked before RPC");
 
@@ -223,6 +240,7 @@ async function inspect(
     gasGwei,
     simulation: !error,
     holdingsUsd: holdings,
+    onboardingRecipient,
   });
   if (decision.tier === "TIER_1_AUTO" && !approved) {
     const rejection = await guardRejection(a);
@@ -333,30 +351,86 @@ export async function executeAction(
   input: Action,
   dryRun = false,
   approvalId?: string,
+  pin?: string,
 ) {
   return exclusive(async () => {
-    const a = normalize(actionSchema.parse(input));
+    let a = normalize(actionSchema.parse(input));
+    let onboardingRecipient: string | undefined;
+    if (a.kind === "fund_account") {
+      if (
+        currentAccount()?.onboardingRecipient?.toLowerCase() !==
+        a.recipient.toLowerCase()
+      )
+        throw new Error(
+          "Onboarding transfers require a server provisioning context.",
+        );
+      if (dryRun || approvalId || a.token !== "ETH" || a.amount !== "0.0003")
+        throw new Error("Invalid onboarding action");
+      await claimDrip(a.recipient);
+      onboardingRecipient = a.recipient;
+      if (
+        (await publicClient.getBalance({ address: account().address })) <=
+        parseUnits("0.002", 18)
+      )
+        throw new Error(
+          "Master gas reserve is at or below 0.002 ETH; fund this wallet manually.",
+        );
+    }
     const l = await ledger();
     const proposal = approvalId
       ? l.pending.find(
-          (p) => p.id === approvalId && p.status === "AWAITING_HITL_APPROVAL",
+          (p) =>
+            p.id === approvalId &&
+            belongsToAccount(p) &&
+            p.status === "AWAITING_HITL_APPROVAL",
         )
       : undefined;
     if (approvalId && !proposal)
       throw new Error("Proposal already handled or missing");
+    if (proposal) {
+      a = normalize(actionSchema.parse(proposal.action));
+      await requireStepUp(pin, `APPROVAL:${proposal.id}`);
+    }
 
     const p = await policy();
-    const check = await inspect(a, l, p, Boolean(proposal));
+    // Auth logging writes the shared ledger. Reload it before any later save.
+    const fresh = proposal ? await ledger() : l;
+    const currentProposal = proposal
+      ? fresh.pending.find((x) => x.id === proposal.id)!
+      : undefined;
+    const check = await inspect(
+      a,
+      fresh,
+      p,
+      Boolean(currentProposal),
+      onboardingRecipient,
+    );
     const base = baseEntry(a, check, p);
+    if (a.kind === "fund_account" && check.decision.tier !== "TIER_1_AUTO") {
+      check.decision = blocked(
+        `Onboarding requires autonomous authorization: ${check.decision.reasons.join("; ")}`,
+      );
+      return record(
+        fresh,
+        {
+          ...base,
+          tier: "BLOCKED",
+          status: "BLOCKED",
+          reasons: check.decision.reasons,
+        },
+        check,
+      );
+    }
 
-    if (dryRun) return record(l, { ...base, status: "DRY_RUN" }, check);
+    if (dryRun) return record(fresh, { ...base, status: "DRY_RUN" }, check);
     if (check.decision.tier === "BLOCKED") {
-      if (proposal) proposal.status = "BLOCKED";
-      return record(l, { ...base, status: "BLOCKED" }, check);
+      if (currentProposal) currentProposal.status = "BLOCKED";
+      return record(fresh, { ...base, status: "BLOCKED" }, check);
     }
     if (check.decision.tier === "TIER_2_HITL" && !proposal) {
       const id = randomUUID();
-      l.pending.push({
+      fresh.pending.push({
+        accountId: currentAccountId(),
         id,
         action: a,
         decision: check.decision,
@@ -366,7 +440,7 @@ export async function executeAction(
         rationale: check.rationale,
       });
       return record(
-        l,
+        fresh,
         { ...base, status: "AWAITING_HITL_APPROVAL" },
         { ...check, proposalId: id },
       );
@@ -375,18 +449,20 @@ export async function executeAction(
     if (check.decision.tier !== "TIER_1_AUTO" && !proposal) {
       throw new Error(`Refused: ${check.decision.tier} is not executable`);
     }
-    return broadcast(l, a, check, base, proposal);
+    return broadcast(fresh, a, check, base, currentProposal);
   });
 }
 
-export async function decide(id: string, approve: boolean) {
-  const found = (await ledger()).pending.find((x) => x.id === id);
+export async function decide(id: string, approve: boolean, pin?: string) {
+  const found = (await ledger()).pending.find(
+    (x) => x.id === id && belongsToAccount(x),
+  );
   if (!found) throw new Error("Proposal not found");
-  if (approve) return executeAction(found.action, false, id);
+  if (approve) return executeAction(found.action, false, id, pin);
 
   return exclusive(async () => {
     const l = await ledger();
-    const current = l.pending.find((x) => x.id === id);
+    const current = l.pending.find((x) => x.id === id && belongsToAccount(x));
     if (!current || current.status !== "AWAITING_HITL_APPROVAL") {
       throw new Error("Proposal already handled");
     }
@@ -457,6 +533,50 @@ export async function audit_contract_address(address: string) {
 
 export const simulate_transaction = (a: Action) => executeAction(a, true);
 export const execute_token_transfer = executeAction;
+
+/** A bounded native-ETH transfer using the same reservation and signing path. */
+export async function autoDrip(a: PublicAccount) {
+  return withMasterFunding(async () => {
+    try {
+      const result = await executeAction({
+        kind: "fund_account",
+        token: "ETH",
+        amount: "0.0003",
+        recipient: a.address,
+        prompt: `ONBOARDING_GAS_DRIP:${a.id}`,
+      });
+      const sent = result as typeof result & {
+        txHash?: string;
+        status?: "CONFIRMED" | "REVERTED";
+      };
+      await setDrip(
+        a.id,
+        sent.txHash
+          ? { status: sent.status ?? "SUBMITTED", txHash: sent.txHash }
+          : { status: "BLOCKED", reason: result.decision.reasons.join("; ") },
+      );
+    } catch (e) {
+      if (e instanceof DripAlreadyClaimedError) return;
+      const reason = (e as Error).message;
+      const l = await ledger();
+      const attempts = l.logs.filter(
+        (x) => x.intent === `ONBOARDING_GAS_DRIP:${a.id}`,
+      );
+      const last = attempts.at(-1);
+      await setDrip(
+        a.id,
+        last?.txHash
+          ? { status: "SUBMITTED", txHash: last.txHash, reason }
+          : {
+              status: attempts.some((x) => x.status === "BROADCASTING")
+                ? "UNRESOLVED"
+                : "SKIPPED",
+              reason,
+            },
+      );
+    }
+  }, a.address);
+}
 
 export async function execute_eth_weth_rebalance(
   targetWethRatio: number,

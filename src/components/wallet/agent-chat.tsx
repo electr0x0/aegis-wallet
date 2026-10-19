@@ -96,12 +96,21 @@ function Exchange({ message }: { message: AgentMessage }) {
 }
 
 export function AgentChat() {
-  const { messages, busy, pending, snapshot, guarded, send, decide } =
-    useWallet();
+  const {
+    messages,
+    busy,
+    authorizing,
+    sessionLocked,
+    pending,
+    snapshot,
+    guarded,
+    send,
+    decide,
+  } = useWallet();
   const [prompt, setPrompt] = useState("");
   const choose = (suggestion: PromptSuggestion) => {
     const scenario = scenarios.find((item) => item.id === suggestion.id);
-    if (scenario && !busy) void send(scenario.prompt);
+    if (scenario && !busy && !sessionLocked) void send(scenario.prompt);
   };
   const empty = !messages.length && !busy && !pending.length;
   return (
@@ -120,7 +129,7 @@ export function AgentChat() {
               you.
             </p>
             <fieldset
-              disabled={busy}
+              disabled={busy || sessionLocked}
               className="mt-6 min-w-0"
               aria-label="Demo scenarios"
             >
@@ -135,7 +144,7 @@ export function AgentChat() {
         {messages.map((message) => (
           <Exchange key={message.id} message={message} />
         ))}
-        {busy && (
+        {busy && !authorizing && (
           <ConversationMessage
             role="assistant"
             name="Aegis"
@@ -164,7 +173,7 @@ export function AgentChat() {
       <div className="composer-region">
         {!empty && (
           <fieldset
-            disabled={busy}
+            disabled={busy || sessionLocked}
             className="min-w-0"
             aria-label="Demo scenarios"
           >
@@ -180,7 +189,7 @@ export function AgentChat() {
           value={prompt}
           onValueChange={setPrompt}
           onSend={(text) => void send(text)}
-          disabled={busy}
+          disabled={busy || sessionLocked}
           maxLength={4000}
           allowAttachments={false}
           placeholder="Describe a task, e.g. send 0.5 USDC to my vault…"

@@ -1,5 +1,53 @@
 @import "./godui-theme.css";
 
+.account-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+.account-switcher-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.account-trigger {
+  max-width: min(360px, 40vw);
+}
+.account-session-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .app-header {
+    height: auto !important;
+    min-height: 85px;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-block: 14px;
+  }
+  .account-switcher {
+    width: 100%;
+  }
+  .account-switcher-main {
+    justify-content: space-between;
+  }
+  .account-trigger {
+    max-width: none;
+    min-width: 0;
+    flex: 1;
+  }
+  .account-session-meta {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /*

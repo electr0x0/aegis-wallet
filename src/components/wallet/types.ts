@@ -1,5 +1,15 @@
 import type { Policy } from "@/lib/security/policyEngine";
 import type { Entry, LedgerVerification, Proposal } from "@/lib/store";
+import type { PublicAccount } from "@/lib/auth/accountStore";
+
+export type AccountState = {
+  accounts: PublicAccount[];
+  activeAccount?: PublicAccount;
+  session: {
+    status: "ACTIVE" | "LOCKED";
+    tier1?: "ACTIVE" | "EXPIRED" | "UNAVAILABLE";
+  };
+};
 
 export const EXPLORER = "https://sepolia.basescan.org";
 
@@ -31,6 +41,9 @@ export type LivePortfolio = {
 };
 export type ProposalView = Proposal & { rationale?: string };
 export type Snapshot = {
+  accounts?: PublicAccount[];
+  activeAccount?: PublicAccount;
+  session?: AccountState["session"];
   ledger: { logs: Entry[]; pending: ProposalView[] };
   policy: Policy;
   portfolio: LivePortfolio | null;

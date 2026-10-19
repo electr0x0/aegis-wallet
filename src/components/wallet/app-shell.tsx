@@ -15,6 +15,38 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { SecurityBanner } from "./security-banner";
 import { useWallet } from "./wallet-provider";
+import { AccountSwitcher } from "@/components/AccountSwitcher";
+import type { PublicAccount } from "@/lib/auth/accountStore";
+
+function WalletFunding({ account }: { account: PublicAccount }) {
+  return (
+    <div className="space-y-1">
+      <p>
+        <b>{account.name}</b> · {account.profile.toLowerCase()} profile ·
+        PIN-encrypted key
+      </p>
+      <p>
+        Onboarding gas: {account.drip.status.toLowerCase().replaceAll("_", " ")}
+        {account.drip.reason ? ` · ${account.drip.reason}` : ""}{" "}
+        {account.drip.txHash && (
+          <a
+            className="underline"
+            href={`https://sepolia.basescan.org/tx/${account.drip.txHash}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View funding transaction
+          </a>
+        )}
+      </p>
+      {account.drip.status !== "CONFIRMED" && (
+        <p className="break-all font-mono text-xs">
+          Manual funding: {account.address}
+        </p>
+      )}
+    </div>
+  );
+}
 
 // Shared chrome for every route: sidebar, header and the cross-page alerts.
 export function AppShell({ children }: { children: ReactNode }) {
@@ -37,13 +69,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </span>
                 </nav>
               </div>
-              <div className="network-status">
-                <span>
-                  <i /> Base Sepolia
-                </span>
-                <span className="network-badge">TESTNET</span>
-              </div>
+              <AccountSwitcher />
             </header>
+            {snapshot?.activeAccount &&
+              snapshot.activeAccount.id !== "master" && (
+                <div className="notice-banner" role="status">
+                  <WalletFunding account={snapshot.activeAccount} />
+                </div>
+              )}
             {/* On /agent the blocked reply already sits in the conversation. */}
             {trip && !chat && (
               <SecurityBanner trip={trip} onDismiss={() => setTrip(null)} />

@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
 import { z } from "zod";
 import { runIntent } from "@/lib/agent/runner";
-import { decide } from "@/lib/agent/tools";
+import { autoDrip, decide } from "@/lib/agent/tools";
+import {
+  createAgentAccount,
+  listAccounts,
+  resolveSession,
+  unlockAccount,
+  closeSession,
+  requireStepUp,
+} from "@/lib/auth/accountStore";
+import { belongsToAccount, withAccount } from "@/lib/auth/context";
 import { guardStatus, portfolio } from "@/lib/chain";
 import {
   exclusive,
@@ -10,6 +19,7 @@ import {
   log,
   policy,
   policyHash,
+  policyFile,
   saveJSON,
   saveLedger,
   verifyLedger,
@@ -36,13 +46,35 @@ const policySchema = z.object({
 });
 
 const postSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("intent"), prompt: z.string().min(1).max(4000) }),
+  z.object({
+    type: z.literal("intent"),
+    accountId: z.string(),
+    prompt: z.string().min(1).max(4000),
+  }),
   z.object({
     type: z.literal("approval"),
     id: z.string().uuid(),
     approve: z.boolean(),
+    accountId: z.string(),
+    pin: z.string().max(64).optional(),
   }),
-  z.object({ type: z.literal("policy"), policy: policySchema }),
+  z.object({
+    type: z.literal("policy"),
+    accountId: z.string(),
+    policy: policySchema,
+    pin: z.string().max(64).optional(),
+  }),
+  z.object({
+    type: z.literal("account_create"),
+    name: z.string().trim().min(1).max(80),
+    profile: z.enum(["CONSERVATIVE", "BALANCED", "AGGRESSIVE"]),
+    pin: z.string().regex(/^\d{6}$/),
+  }),
+  z.object({
+    type: z.literal("account_switch"),
+    id: z.string(),
+    pin: z.string().max(64),
+  }),
 ]);
 
 // Loopback host plus exact same-origin mutations: no remote access, no browser CSRF.
@@ -68,11 +100,15 @@ async function settle<T>(promise: Promise<T>) {
   }
 }
 
-async function updatePolicy(settings: z.infer<typeof policySchema>) {
+async function updatePolicy(
+  settings: z.infer<typeof policySchema>,
+  pin?: string,
+) {
   return exclusive(async () => {
+    await requireStepUp(pin, "POLICY_UPDATE");
     const previous = await policy();
     const next = { ...previous, ...settings };
-    await saveJSON("policy.json", next);
+    await saveJSON(policyFile(), next);
     // Loosening a limit is itself an auditable act, so it enters the sealed ledger.
     const l = await ledger();
     log(l, {
@@ -94,19 +130,51 @@ async function updatePolicy(settings: z.infer<typeof policySchema>) {
 export async function GET(req: NextRequest) {
   try {
     assertLocalOperator(req);
-    const [l, p] = await Promise.all([ledger(), policy()]);
-    const [live, guard, verification] = await Promise.all([
-      settle(portfolio()),
-      settle(guardStatus()),
-      verifyLedger(l),
-    ]);
-    return NextResponse.json({
-      ledger: l,
-      policy: p,
-      portfolio: live.value,
-      guard: guard.value,
-      verification,
-      error: live.error || guard.error,
+    const accounts = await listAccounts();
+    let context;
+    try {
+      context = resolveSession(req.cookies.get("aegis_session")?.value);
+    } catch {
+      return NextResponse.json(
+        { accounts, session: { status: "LOCKED" } },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    return await withAccount(context, async () => {
+      const [l, p] = await Promise.all([ledger(), policy()]);
+      const [live, guard, verification] = await Promise.all([
+        settle(portfolio()),
+        settle(guardStatus()),
+        verifyLedger(l),
+      ]);
+      return NextResponse.json(
+        {
+          ledger: {
+            logs: l.logs.filter(belongsToAccount),
+            pending: l.pending.filter(belongsToAccount),
+          },
+          accounts,
+          activeAccount: accounts.find((a) => a.id === context.id),
+          session: {
+            status: "ACTIVE",
+            tier1:
+              live.error || guard.error
+                ? "UNAVAILABLE"
+                : guard.value &&
+                    (guard.value.sessionExpiry * 1000 <= Date.now() ||
+                      guard.value.sessionKey.toLowerCase() !==
+                        live.value?.agent.toLowerCase())
+                  ? "EXPIRED"
+                  : "ACTIVE",
+          },
+          policy: p,
+          portfolio: live.value,
+          guard: guard.value,
+          verification,
+          error: live.error || guard.error,
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 403 });
@@ -127,12 +195,46 @@ export async function POST(req: NextRequest) {
       );
     }
     const body = parsed.data;
-    let result: unknown;
-    if (body.type === "intent") result = await runIntent(body.prompt);
-    else if (body.type === "approval")
-      result = await decide(body.id, body.approve);
-    else result = await updatePolicy(body.policy);
-    return NextResponse.json({ result });
+    const oldToken = req.cookies.get("aegis_session")?.value;
+    if (body.type === "account_create" || body.type === "account_switch") {
+      const opened =
+        body.type === "account_create"
+          ? await createAgentAccount(
+              body.name,
+              "OPERATOR",
+              body.pin,
+              body.profile,
+            )
+          : await unlockAccount(body.id, body.pin);
+      if (body.type === "account_create") await autoDrip(opened.account);
+      const updated = (await listAccounts()).find(
+        (a) => a.id === opened.account.id,
+      )!;
+      closeSession(oldToken);
+      const response = NextResponse.json({
+        result: { account: updated },
+      });
+      response.cookies.set("aegis_session", opened.token, {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: req.nextUrl.protocol === "https:",
+        path: "/",
+      });
+      return response;
+    }
+    const context = resolveSession(oldToken);
+    if (body.accountId !== context.id)
+      throw new Error(
+        "Account changed. Refresh before submitting this operation.",
+      );
+    return await withAccount(context, async () => {
+      let result: unknown;
+      if (body.type === "intent") result = await runIntent(body.prompt);
+      else if (body.type === "approval")
+        result = await decide(body.id, body.approve, body.pin);
+      else result = await updatePolicy(body.policy, body.pin);
+      return NextResponse.json({ result });
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

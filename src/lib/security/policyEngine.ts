@@ -18,7 +18,7 @@ export type Policy = {
 };
 
 export type Action = {
-  kind: "read" | "wrap_eth" | "unwrap_weth" | "transfer_token";
+  kind: "read" | "wrap_eth" | "unwrap_weth" | "transfer_token" | "fund_account";
   token: "ETH" | "WETH" | "USDC";
   amount: string;
   recipient: string;
@@ -40,6 +40,7 @@ export type PolicyContext = {
   gasGwei: number;
   simulation: boolean;
   holdingsUsd?: number;
+  onboardingRecipient?: string;
 };
 
 export const ADVERSARIAL =
@@ -65,7 +66,8 @@ function runwayAfter(
   context: PolicyContext,
 ): number | undefined {
   const treasury = policy.treasury;
-  if (action.kind !== "transfer_token" || !treasury) return undefined;
+  if (!["transfer_token", "fund_account"].includes(action.kind) || !treasury)
+    return undefined;
   const holdings = context.holdingsUsd;
   if (holdings === undefined || !Number.isFinite(holdings)) return undefined;
   if (!(treasury.monthlyExpensesUsd > 0)) return undefined;
@@ -82,7 +84,18 @@ export function evaluateTransactionPolicy(
   if (listed(policy.blacklistedAddresses, action.recipient)) {
     return block("Blacklisted recipient");
   }
-  const trusted = listed(policy.whitelistedAddresses, action.recipient);
+  const onboarding = action.kind === "fund_account";
+  if (
+    onboarding &&
+    (action.token !== "ETH" ||
+      action.amount !== "0.0003" ||
+      context.onboardingRecipient?.toLowerCase() !==
+        action.recipient.toLowerCase())
+  ) {
+    return block("Invalid or unreserved onboarding drip");
+  }
+  const trusted =
+    listed(policy.whitelistedAddresses, action.recipient) || onboarding;
   if (ADVERSARIAL.test(action.prompt) && !trusted) {
     return block("Adversarial instruction with unverified recipient");
   }

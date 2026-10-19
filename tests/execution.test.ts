@@ -16,6 +16,13 @@ const mocks = vi.hoisted(() => ({
   simulate: vi.fn(),
   balance: vi.fn(),
 }));
+// PIN persistence and enforcement are exercised with the real account store in accounts.test.ts.
+vi.mock("../src/lib/auth/accountStore", () => ({
+  requireStepUp: vi.fn(),
+  claimDrip: vi.fn(),
+  setDrip: vi.fn(),
+  withMasterFunding: (fn: () => unknown) => fn(),
+}));
 vi.mock("../src/lib/chain", () => ({
   WETH: "0x4200000000000000000000000000000000000006",
   USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",

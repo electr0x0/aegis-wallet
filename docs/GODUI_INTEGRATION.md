@@ -75,6 +75,8 @@ Application icons use per-icon imports from `@svg-animated-icons/react` ([librar
 
 ## Validation
 
+Account provisioning and PIN confirmation use the official GodUI Dialog, Dropdown Menu, Input and Button source. Dialog and Dropdown Menu source was retrieved through the GodUI MCP for this addition. The approval hold control remains the existing Lab Hold Confirm Button, followed by the server-verified PIN step. The account switcher uses Lucide icons in accordance with AGENTS.md.
+
 For a production check alongside a running development server, set `AEGIS_BUILD_DIR=.next-verify` before `pnpm build` to isolate Next.js output. The default output directory remains `.next`.
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. The Vitest suite includes policy, execution concurrency, local API access, approval review/cancellation/confirmation, and text-only composer behavior. Browser checks of the light theme measured zero horizontal overflow on the Portfolio, Guardrails and Evidence tabs at 360px and 1024px, and confirmed a visible emerald focus ring on keyboard-focused scenario buttons. Live portfolio reads and blocked security scenarios can be exercised without funding; live approval/broadcast requires funded Base Sepolia assets.

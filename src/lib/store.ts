@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { keccak256, recoverMessageAddress, toBytes, type Hex } from "viem";
-import { account } from "./chain";
+import { ledgerSigner } from "./chain";
+import { currentAccountId } from "./auth/context";
 import type { Action, Decision, Policy } from "./security/policyEngine";
 
 export type Entry = {
+  accountId?: string;
   operationId?: string;
   id: string;
   timestamp: string;
@@ -28,6 +30,7 @@ export type Entry = {
 };
 
 export type Proposal = {
+  accountId?: string;
   id: string;
   action: Action;
   decision: Decision;
@@ -70,14 +73,19 @@ export async function readJSON<T>(name: string, fallback: T): Promise<T> {
 
 // Write to a temp file, then rename: readers never see a half-written file.
 export async function saveJSON(name: string, value: unknown) {
-  await mkdir(root, { recursive: true });
+  await mkdir(path.dirname(path.join(root, name)), { recursive: true });
   const temp = path.join(root, `${name}.${randomUUID()}.tmp`);
   await writeFile(temp, JSON.stringify(value, null, 2), { mode: 0o600 });
   await rename(temp, path.join(root, name));
 }
 
 export async function policy() {
-  return readJSON<Policy>("policy.json", DEFAULT_POLICY);
+  return readJSON<Policy>(policyFile(), DEFAULT_POLICY);
+}
+
+export function policyFile() {
+  const id = currentAccountId();
+  return id === "master" ? "policy.json" : `accounts/${id}/policy.json`;
 }
 
 export const ledger = () =>
@@ -98,6 +106,7 @@ export function log(l: Ledger, entry: Omit<Entry, "id" | "timestamp">): void {
   // The deep copy keeps later caller mutations out of an already sealed entry.
   const { prevHash, hash, signature, signer, ...fields } = entry;
   l.logs.push({
+    accountId: currentAccountId(),
     ...structuredClone(fields),
     id: randomUUID(),
     timestamp: new Date().toISOString(),
@@ -131,7 +140,7 @@ async function seal(entry: Entry, prevHash: Hex): Promise<void> {
   entry.prevHash = prevHash;
   entry.hash = entryHash(entry);
   try {
-    const agent = account();
+    const agent = ledgerSigner();
     entry.signature = await agent.signMessage({ message: { raw: entry.hash } });
     entry.signer = agent.address;
   } catch {
@@ -151,7 +160,7 @@ export async function saveLedger(l: Ledger): Promise<void> {
 
 function agentAddress(): Hex | null {
   try {
-    return account().address;
+    return ledgerSigner().address;
   } catch {
     return null;
   }

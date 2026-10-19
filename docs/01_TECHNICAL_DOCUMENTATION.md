@@ -6,30 +6,50 @@ AegisWallet is an agent wallet on Base Sepolia (chain 84532). A language model, 
 
 Before value moves, three independent layers must all accept it.
 
-| Layer | Runs in | Enforces | Holds against |
-|---|---|---|---|
-| 1. Policy engine | Server, `src/lib/security/policyEngine.ts` | Tier decision: whitelist and blacklist, single-transaction and rolling 24-hour USD caps, gas ceiling, prompt-injection heuristics, reserve-runway floor | Model error and manipulated instructions. The model proposes; it does not decide. |
-| 2. Pre-flight simulation | Server to RPC, `simulate()` in `src/lib/agent/tools.ts` | Chain ID 84532; `eth_call` and `estimateGas` of the exact call from the address that holds the funds; ERC-20 transfers must return `true`. A failure is recorded as one sentence: the shortfall when the holder lacks the balance (for example "Insufficient ETH: the wallet holds 0.0008 ETH, this needs 0.001 ETH."), otherwise viem's short message rather than the raw RPC dump | Calls that would revert, wrong network, malformed calldata |
-| 3. AgentGuard | Base Sepolia, `contracts/AgentGuard.sol` | Session-key expiry, per-asset per-transaction and per-UTC-day caps, target, recipient and selector allowlists, owner-signed approvals | Compromise of the LLM, the agent logic, the off-chain policy, or the session key itself. It does not hold against compromise of the owner key (see 05). |
+| Layer                    | Runs in                                                 | Enforces                                                                                                                                                                                                                                                                                                                                                                            | Holds against                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Policy engine         | Server, `src/lib/security/policyEngine.ts`              | Tier decision: whitelist and blacklist, single-transaction and rolling 24-hour USD caps, gas ceiling, prompt-injection heuristics, reserve-runway floor                                                                                                                                                                                                                             | Model error and manipulated instructions. The model proposes; it does not decide.                                                                       |
+| 2. Pre-flight simulation | Server to RPC, `simulate()` in `src/lib/agent/tools.ts` | Chain ID 84532; `eth_call` and `estimateGas` of the exact call from the address that holds the funds; ERC-20 transfers must return `true`. A failure is recorded as one sentence: the shortfall when the holder lacks the balance (for example "Insufficient ETH: the wallet holds 0.0008 ETH, this needs 0.001 ETH."), otherwise viem's short message rather than the raw RPC dump | Calls that would revert, wrong network, malformed calldata                                                                                              |
+| 3. AgentGuard            | Base Sepolia, `contracts/AgentGuard.sol`                | Session-key expiry, per-asset per-transaction and per-UTC-day caps, target, recipient and selector allowlists, owner-signed approvals                                                                                                                                                                                                                                               | Compromise of the LLM, the agent logic, the off-chain policy, or the session key itself. It does not hold against compromise of the owner key (see 05). |
 
 The planner, the tool executor and the policy gate are separate code paths in one Node process. They are not separately deployed services. All signing happens server-side with viem. The browser never holds a key.
 
 ### Components
 
-| Path | Role |
-|---|---|
-| `src/app/api/agent/route.ts` | The only API. Loopback host and exact same-origin checks, Zod-validated request bodies |
-| `src/lib/agent/runner.ts` | Intent routing, deterministic demo parser, bounded LLM tool-calling planner |
-| `src/lib/agent/tools.ts` | Typed tools: validation, simulation, policy evaluation, guard pre-flight, reservation, broadcast, approvals |
-| `src/lib/security/policyEngine.ts` | Pure tier decision and deterministic rationale. No I/O |
-| `src/lib/security/bytecode.ts` | Static bytecode heuristics for the address-audit tool. Advisory only; not part of the tier decision |
-| `src/lib/chain.ts` | viem clients, token constants, call encoding, guard call wrapping, owner-approval signing, guard error decoding, portfolio reads |
-| `src/lib/store.ts` | Atomic JSON persistence, process-wide mutex, ledger sealing and verification |
-| `contracts/AgentGuard.sol` | On-chain session-key guard |
-| `scripts/` | Wallet setup, guard compile, deploy and renew, compromised-key attack demo |
-| `data/policy.json` | Committed default policy. `data/audit_log.json` (the ledger) is private and git-ignored |
+| Path                               | Role                                                                                                                             |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/api/agent/route.ts`       | The only API. Loopback host and exact same-origin checks, Zod-validated request bodies                                           |
+| `src/lib/agent/runner.ts`          | Intent routing, deterministic demo parser, bounded LLM tool-calling planner                                                      |
+| `src/lib/agent/tools.ts`           | Typed tools: validation, simulation, policy evaluation, guard pre-flight, reservation, broadcast, approvals                      |
+| `src/lib/security/policyEngine.ts` | Pure tier decision and deterministic rationale. No I/O                                                                           |
+| `src/lib/security/bytecode.ts`     | Static bytecode heuristics for the address-audit tool. Advisory only; not part of the tier decision                              |
+| `src/lib/chain.ts`                 | viem clients, token constants, call encoding, guard call wrapping, owner-approval signing, guard error decoding, portfolio reads |
+| `src/lib/store.ts`                 | Atomic JSON persistence, process-wide mutex, ledger sealing and verification                                                     |
+| `contracts/AgentGuard.sol`         | On-chain session-key guard                                                                                                       |
+| `scripts/`                         | Wallet setup, guard compile, deploy and renew, compromised-key attack demo                                                       |
+| `data/policy.json`                 | Committed default policy. `data/audit_log.json` (the ledger) is private and git-ignored                                          |
 
 ## 2. Architecture
+
+### Account and session management
+
+`src/lib/auth/accountStore.ts` maintains `data/accounts.json` under the existing `exclusive()` mutex. It seeds the default master record from `AGENT_PRIVATE_KEY`, with role `INSTITUTIONAL_ADMIN`, PIN `884210`, and metadata status `HSM_ENV_ISOLATED`. That status denotes environment isolation in this software prototype, not a hardware HSM. The “Pre-Funded” name is a preset; live RPC balances are authoritative.
+
+Provisioning generates a viem keypair, derives a 256-bit key with scrypt from the chosen PIN, a unique account salt and a separately persisted server salt (`data/auth_salt.json`), then encrypts the private key using AES-256-GCM. A fresh 96-bit IV, authentication tag and account identity as additional authenticated data prevent silent ciphertext or identity substitution. A constant-time HMAC verifier checks the PIN without retaining plaintext PINs or derived encryption keys. No private key, verifier or salt is sent to the browser.
+
+Account unlock creates a random 256-bit session token, delivered in an HttpOnly, SameSite=Strict cookie (Secure on HTTPS). The server keeps decrypted keys only in memory for a 30-minute session. The cookie survives a restart to show a locked account chooser rather than silently falling back to master. The no-cookie default is the local master, for judge onboarding. This remains a trusted-loopback demonstration, not a public multi-tenant service.
+
+`auth/context.ts` uses AsyncLocalStorage to bind a request's account key and policy path. Master operations retain the configured AgentGuard. New account requests explicitly use EOA mode; they cannot operate the master's guard. Master policy stays in `data/policy.json`; each new account gets `data/accounts/<id>/policy.json`. Presets set single/daily USD caps to 1/5, 2/10 or 10/50, inheriting other starting policy settings. The API requires the expected account ID on intents, approvals and policy saves, rejecting stale-tab requests after switching.
+
+Pending proposals, audit entries and rolling budgets are account-bound. Historical entries with no account ID belong to the master. The combined audit chain retains one stable master environment signer, so switching a transaction signer does not invalidate earlier seals. The API filters the active account's entries and proposals, while verifying the entire combined chain. The navbar shows the selected account's public address, live balances, key custody mode, and actual guard/EOA session status. Account changes clear the previous conversation and reset the policy form.
+
+Approval and policy mutation perform a fresh, operation-bound PIN check inside `exclusive()`, logging `TIER_2_AUTH_SUCCESS` or `TIER_2_AUTH_FAILED`. A PIN is not a reusable approval grant. Five failures trigger a persistent five-minute lockout. Approval then revalidates the stored proposal with fresh policy, simulation and, where configured, the on-chain guard. UI cancellation sends no mutation.
+
+### Optional onboarding gas
+
+`autoDrip` uses a server-only `fund_account` action through `executeAction`; it does not directly sign. It atomically consumes a provisioned destination's one-time drip eligibility, requires exactly 0.0003 native ETH, and checks the master EOA has strictly more than 0.002 ETH using bigint base units. No retry is allowed after a crash or uncertain send. The transaction uses the master EOA's gas reserve, rather than withdrawing from AgentGuard.
+
+The deterministic policy recognizes only the reserved onboarding recipient for this exact capability. All hard checks, single/daily spend limits, human-confirmation setting and reserve-runway floor still apply. If it would require Tier 2, onboarding is blocked instead of auto-approving or changing a whitelist. Reservation, returned hash and receipt follow the existing `BROADCASTING → SUBMITTED → CONFIRMED/REVERTED` ledger sequence. Account metadata displays skips, blocks and unresolved outcomes without a success claim. Funding hash and transaction evidence live on the master's account audit trail; the new account's banner links to the same returned hash.
 
 ```mermaid
 flowchart TD
@@ -43,7 +63,7 @@ flowchart TD
   SIM --> TIER["Layer 1b: tier decision and deterministic rationale"]
   TIER -->|BLOCKED| LED
   TIER -->|TIER_2_HITL| PQ["Pending proposal"]
-  PQ -->|operator holds to confirm| APR["Re-run Layers 1 and 2, then owner signs approval digest"]
+  PQ -->|operator holds and verifies PIN| APR["Re-run Layers 1 and 2, then owner signs approval digest"]
   TIER -->|TIER_1_AUTO| GPF["Guard pre-flight: estimateGas of guard.execute"]
   GPF --> TX["Session key signs and broadcasts"]
   APR --> TX
@@ -85,7 +105,8 @@ Every agent write goes through `executeAction`, whether it comes from the parser
    - `prompt` of at most 4,000 characters
 
    Reads are not accepted here; they have their own tools. Wrap and unwrap are normalised to the canonical WETH contract and token.
-2. **Bind the approval.** On an approval, the pending proposal must still be `AWAITING_HITL_APPROVAL`. Proposals are single-use.
+
+2. **Bind the approval.** On an approval, the pending proposal must still be `AWAITING_HITL_APPROVAL`. Proposals are single-use and bound to an account. A fresh six-digit PIN check is required before approval, and execution uses the stored proposal action.
 3. **Value the action.**
    - Reference USD is the amount × $2,500 for ETH and WETH, or × $1 for USDC.
    - Rolling autonomous spend is the sum of Tier 1 operations whose latest status is `BROADCASTING`, `SUBMITTED` or `CONFIRMED` within the last 24 hours. Unresolved broadcasts count. Tier 2 spend was explicitly authorised and is excluded.
@@ -114,19 +135,19 @@ Every agent write goes through `executeAction`, whether it comes from the parser
 
 #### Policy evaluation order (`evaluateTransactionPolicy`)
 
-| Order | Check | Outcome |
-|---|---|---|
-| 1 | Recipient is on the blacklist | `BLOCKED` |
-| 2 | Prompt matches the adversarial pattern and the recipient is not whitelisted | `BLOCKED` |
-| 3 | `kind` is `read` | `TIER_0`. This branch is reached only by direct callers; `executeAction` does not accept reads |
-| 4 | USD value is not finite or is ≤ 0 | `BLOCKED` |
-| 5 | Simulation failed | `BLOCKED` |
-| 6 | Gas price is non-finite or above `maxGasGwei` | `BLOCKED` |
-| 7 | Soft reasons, collected together: recipient not whitelisted; value above the single-transaction cap; rolling spend plus value above the 24-hour cap; runway after the transfer below the floor; "always ask" enabled | Any reason gives `TIER_2_HITL` (risk 65). No reason gives `TIER_1_AUTO` (risk 10) |
+| Order | Check                                                                                                                                                                                                                | Outcome                                                                                        |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1     | Recipient is on the blacklist                                                                                                                                                                                        | `BLOCKED`                                                                                      |
+| 2     | Prompt matches the adversarial pattern and the recipient is not whitelisted                                                                                                                                          | `BLOCKED`                                                                                      |
+| 3     | `kind` is `read`                                                                                                                                                                                                     | `TIER_0`. This branch is reached only by direct callers; `executeAction` does not accept reads |
+| 4     | USD value is not finite or is ≤ 0                                                                                                                                                                                    | `BLOCKED`                                                                                      |
+| 5     | Simulation failed                                                                                                                                                                                                    | `BLOCKED`                                                                                      |
+| 6     | Gas price is non-finite or above `maxGasGwei`                                                                                                                                                                        | `BLOCKED`                                                                                      |
+| 7     | Soft reasons, collected together: recipient not whitelisted; value above the single-transaction cap; rolling spend plus value above the 24-hour cap; runway after the transfer below the floor; "always ask" enabled | Any reason gives `TIER_2_HITL` (risk 65). No reason gives `TIER_1_AUTO` (risk 10)              |
 
 Hard blocks (rows 1, 2, 4, 5 and 6) cannot be overridden by approval. Approval re-runs the whole algorithm against the current policy and a fresh simulation.
 
-**Reserve-runway floor.** For `transfer_token` only (a wrap does not leave the wallet), the engine computes:
+**Reserve-runway floor.** For `transfer_token` and `fund_account` (a wrap does not leave the wallet), the engine computes:
 
 ```
 runway months = (fiatReserveUsd + on-chain holdings USD − transfer USD) / monthlyExpensesUsd
@@ -136,15 +157,15 @@ If the result is below `minRunwayMonths`, the transfer needs a human. The fiat f
 
 #### Committed default policy (`data/policy.json`)
 
-| Setting | Value |
-|---|---|
-| Single-transaction cap (Tier 1) | $20 |
-| Rolling 24-hour autonomous budget | $50 |
-| Gas price ceiling | 25 gwei |
-| Whitelist | WETH (the wrap and unwrap target), the demo vault address |
-| Blacklist | `0x000000000000000000000000000000000000dead`, `0xBadC0de000000000000000000000000000000000` |
-| Always ask before signing | off |
-| Treasury profile | $8,990 fiat reserve, $3,000 monthly expenses, 3-month floor |
+| Setting                           | Value                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| Single-transaction cap (Tier 1)   | $20                                                                                        |
+| Rolling 24-hour autonomous budget | $50                                                                                        |
+| Gas price ceiling                 | 25 gwei                                                                                    |
+| Whitelist                         | WETH (the wrap and unwrap target), the demo vault address                                  |
+| Blacklist                         | `0x000000000000000000000000000000000000dead`, `0xBadC0de000000000000000000000000000000000` |
+| Always ask before signing         | off                                                                                        |
+| Treasury profile                  | $8,990 fiat reserve, $3,000 monthly expenses, 3-month floor                                |
 
 `pnpm setup-wallets` appends the operator's own vault address to the whitelist. In the dashboard, the operator can edit the caps, the gas ceiling, the whitelist and the "always ask" switch. The API bounds every value. Each saved change is recorded as a sealed `POLICY_UPDATE` ledger entry carrying the old and new policy hashes. The blacklist cannot be changed through the API, and the treasury profile has no dashboard editor; change it in `data/policy.json`. The policy file is read on every request.
 
@@ -166,35 +187,35 @@ When the planner finishes, its closing message is model text. It is shown in the
 
 ### 4.1 State
 
-| Field | Meaning |
-|---|---|
-| `owner` (immutable) | The only key that can authorise anything outside the session policy |
-| `sessionKey`, `sessionExpiry` | The agent EOA and the Unix time after which `execute` reverts |
-| `allowedTarget[address]` | Contracts the session key may call with calldata |
-| `allowedRecipient[address]` | Addresses that may receive native ETH or tokens via `transfer` |
-| `limits[asset]` | `perTx`, `perDay`, `spent`, `day` per asset. Native ETH is tracked under `address(0)` |
-| `usedNonce[uint256]` | Owner-approval nonces already consumed |
+| Field                         | Meaning                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------- |
+| `owner` (immutable)           | The only key that can authorise anything outside the session policy                   |
+| `sessionKey`, `sessionExpiry` | The agent EOA and the Unix time after which `execute` reverts                         |
+| `allowedTarget[address]`      | Contracts the session key may call with calldata                                      |
+| `allowedRecipient[address]`   | Addresses that may receive native ETH or tokens via `transfer`                        |
+| `limits[asset]`               | `perTx`, `perDay`, `spent`, `day` per asset. Native ETH is tracked under `address(0)` |
+| `usedNonce[uint256]`          | Owner-approval nonces already consumed                                                |
 
 ### 4.2 Functions
 
-| Function | Caller | Behaviour |
-|---|---|---|
-| `execute(target, value, data)` | Session key | Reverts if the session has expired. Enforces the call policy (4.3), books the spend, makes the call, and checks a `transfer` return value. Emits `Executed(..., ownerApproved = false)` |
-| `executeApproved(target, value, data, nonce, deadline, signature)` | Session key | Requires `block.timestamp ≤ deadline`, an unused nonce and an owner signature over `approvalDigest`. Marks the nonce used, then makes the call. Session limits do not apply, because the owner's signature is the authority. Works with an expired session, which is how an owner-signed `setSession` renews one |
-| `approvalDigest(target, value, data, nonce, deadline)` | View | `keccak256(abi.encode(chainid, address(this), target, value, keccak256(data), nonce, deadline))` |
-| `ownerExecute(target, value, data)` | Owner | Arbitrary call, sent and paid for by the owner directly |
-| `setSession`, `revokeSession`, `setTarget`, `setRecipient`, `setLimit` | Owner, or the contract itself | Administration. "Itself" lets the session key relay an owner-signed admin call through `executeApproved` with `target = address(this)` |
-| `remaining(asset)` | View | What the session key may still spend of `asset` in the current UTC day |
+| Function                                                               | Caller                        | Behaviour                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `execute(target, value, data)`                                         | Session key                   | Reverts if the session has expired. Enforces the call policy (4.3), books the spend, makes the call, and checks a `transfer` return value. Emits `Executed(..., ownerApproved = false)`                                                                                                                          |
+| `executeApproved(target, value, data, nonce, deadline, signature)`     | Session key                   | Requires `block.timestamp ≤ deadline`, an unused nonce and an owner signature over `approvalDigest`. Marks the nonce used, then makes the call. Session limits do not apply, because the owner's signature is the authority. Works with an expired session, which is how an owner-signed `setSession` renews one |
+| `approvalDigest(target, value, data, nonce, deadline)`                 | View                          | `keccak256(abi.encode(chainid, address(this), target, value, keccak256(data), nonce, deadline))`                                                                                                                                                                                                                 |
+| `ownerExecute(target, value, data)`                                    | Owner                         | Arbitrary call, sent and paid for by the owner directly                                                                                                                                                                                                                                                          |
+| `setSession`, `revokeSession`, `setTarget`, `setRecipient`, `setLimit` | Owner, or the contract itself | Administration. "Itself" lets the session key relay an owner-signed admin call through `executeApproved` with `target = address(this)`                                                                                                                                                                           |
+| `remaining(asset)`                                                     | View                          | What the session key may still spend of `asset` in the current UTC day                                                                                                                                                                                                                                           |
 
 ### 4.3 Session-key call policy (`execute`)
 
-| Call shape | Requirements | Spend booked against |
-|---|---|---|
-| Empty calldata (native ETH send) | `target` is an allowed recipient | ETH (`address(0)`), `value` |
-| `transfer(to, amount)` (`0xa9059cbb`) | `target` is an allowed target with a configured limit, `value == 0`, decoded `to` is an allowed recipient | That token, `amount` |
-| `deposit()` (`0xd0e30db0`) | `target` is an allowed target | ETH, `value` |
-| `withdraw(uint256)` (`0x2e1a7d4d`) | `target` is an allowed target, `value == 0` | Nothing (unwrapping returns ETH to the guard) |
-| Any other selector, including `approve`, `transferFrom` and `permit` | — | Reverts `SelectorNotAllowed` |
+| Call shape                                                           | Requirements                                                                                              | Spend booked against                          |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Empty calldata (native ETH send)                                     | `target` is an allowed recipient                                                                          | ETH (`address(0)`), `value`                   |
+| `transfer(to, amount)` (`0xa9059cbb`)                                | `target` is an allowed target with a configured limit, `value == 0`, decoded `to` is an allowed recipient | That token, `amount`                          |
+| `deposit()` (`0xd0e30db0`)                                           | `target` is an allowed target                                                                             | ETH, `value`                                  |
+| `withdraw(uint256)` (`0x2e1a7d4d`)                                   | `target` is an allowed target, `value == 0`                                                               | Nothing (unwrapping returns ETH to the guard) |
+| Any other selector, including `approve`, `transferFrom` and `permit` | —                                                                                                         | Reverts `SelectorNotAllowed`                  |
 
 Calldata shorter than four bytes maps to selector zero and is rejected. The guard is not an allowed target of itself, so the session key cannot reach the admin functions through `execute`.
 
@@ -220,16 +241,16 @@ Events: `Executed(target, value, selector, ownerApproved)`, `SessionSet(sessionK
 
 ### 4.6 Deployed configuration (`scripts/deploy-guard.ts`)
 
-| Parameter | Value |
-|---|---|
-| Owner | Address of `VAULT_PRIVATE_KEY` |
-| Session key | The agent EOA (`AGENT_PRIVATE_KEY`) |
-| Session expiry | Deployment time + `SESSION_HOURS` (default 24) |
-| Allowed targets | WETH, USDC |
-| Allowed recipients | `VAULT_ADDRESS` only |
-| ETH limit | 0.01 per transaction, 0.02 per UTC day |
-| WETH limit | 0.01 per transaction, 0.02 per UTC day |
-| USDC limit | 20 per transaction, 50 per UTC day |
+| Parameter          | Value                                          |
+| ------------------ | ---------------------------------------------- |
+| Owner              | Address of `VAULT_PRIVATE_KEY`                 |
+| Session key        | The agent EOA (`AGENT_PRIVATE_KEY`)            |
+| Session expiry     | Deployment time + `SESSION_HOURS` (default 24) |
+| Allowed targets    | WETH, USDC                                     |
+| Allowed recipients | `VAULT_ADDRESS` only                           |
+| ETH limit          | 0.01 per transaction, 0.02 per UTC day         |
+| WETH limit         | 0.01 per transaction, 0.02 per UTC day         |
+| USDC limit         | 20 per transaction, 50 per UTC day             |
 
 The on-chain limits are a backstop, not a mirror of Layer 1. They are per asset, in token units, while the off-chain caps are in reference USD across all assets.
 
@@ -239,16 +260,16 @@ The on-chain limits are a backstop, not a mirror of Layer 1. They are per asset,
 
 `data/audit_log.json` holds `logs`, the append-only entry list, and `pending`, the Tier 2 proposals.
 
-| Field | Content |
-|---|---|
-| `id`, `timestamp` | Assigned when the entry is appended |
-| `operationId` | Shared by the `BROADCASTING`, `SUBMITTED` and `CONFIRMED`/`REVERTED` entries of one broadcast |
-| `intent` | The operator's original prompt, never model arguments |
-| `tier`, `status`, `reasons`, `riskScore`, `usd`, `simulation`, `gasEstimate`, `txHash` | The decision, its inputs and the outcome |
-| `rationale` | The deterministic sentence from section 3.3, or a fixed sentence for reads, rejections, policy changes and operator setup steps |
-| `policyHash` | keccak256 of the canonical JSON of the policy in force. Present on every entry written by `executeAction`, and on `POLICY_UPDATE` entries (which also list the previous hash). Tier 0 reads, operator rejections, setup steps and attack-demo entries carry none |
-| `prevHash`, `hash` | Hash chain |
-| `signature`, `signer` | EIP-191 signature over `hash` by the agent key, and the signing address |
+| Field                                                                                  | Content                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `timestamp`                                                                      | Assigned when the entry is appended                                                                                                                                                                                                                              |
+| `operationId`                                                                          | Shared by the `BROADCASTING`, `SUBMITTED` and `CONFIRMED`/`REVERTED` entries of one broadcast                                                                                                                                                                    |
+| `intent`                                                                               | The operator's original prompt, never model arguments                                                                                                                                                                                                            |
+| `tier`, `status`, `reasons`, `riskScore`, `usd`, `simulation`, `gasEstimate`, `txHash` | The decision, its inputs and the outcome                                                                                                                                                                                                                         |
+| `rationale`                                                                            | The deterministic sentence from section 3.3, or a fixed sentence for reads, rejections, policy changes and operator setup steps                                                                                                                                  |
+| `policyHash`                                                                           | keccak256 of the canonical JSON of the policy in force. Present on every entry written by `executeAction`, and on `POLICY_UPDATE` entries (which also list the previous hash). Tier 0 reads, operator rejections, setup steps and attack-demo entries carry none |
+| `prevHash`, `hash`                                                                     | Hash chain                                                                                                                                                                                                                                                       |
+| `signature`, `signer`                                                                  | EIP-191 signature over `hash` by the agent key, and the signing address                                                                                                                                                                                          |
 
 A status change never edits an entry. A new entry is appended, any seal copied from the previous entry is stripped, and the fields are deep-copied so that later in-memory changes cannot alter an entry that is already sealed.
 
@@ -280,28 +301,28 @@ Boundaries of this guarantee:
 
 ## 6. LLM planner
 
-| Aspect | Implementation |
-|---|---|
-| Provider | Gemini through its OpenAI-compatible endpoint (`generativelanguage.googleapis.com/v1beta/openai/chat/completions`), model `GEMINI_MODEL`, default `gemini-3.5-flash-lite`. If `GEMINI_API_KEY` is not set and `OPENAI_API_KEY` is, OpenAI chat completions with `OPENAI_MODEL`, default `gpt-4.1-mini`. This is a configuration choice, not a runtime failover |
-| Tools | `get_wallet_portfolio`, `execute_token_transfer`, `simulate_transaction`, `audit_contract_address`, `execute_eth_weth_rebalance`. Each maps to a function in `tools.ts`, and every write goes through `executeAction` |
-| Bounds | At most 5 model rounds and 4 tool calls per request. Tool calls are serial (`parallel_tool_calls: false`). The plan stops at the first Tier 2 hold, the first block, or the first broadcast, so the model never gets a chance to resubmit a transaction |
-| What the model cannot do | Sign anything; approve a pending proposal (approval exists only as an operator API call); call an untyped function; replace the stored prompt (the server overwrites `prompt` in every tool call with the operator's original text); bypass refusals for swaps, yield, staking or bridging, which are applied before the planner runs |
-| Without an LLM | The demo scenarios, single wraps and transfers, portfolio reads and audits all run through the deterministic parser with no API key |
+| Aspect                   | Implementation                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provider                 | Gemini through its OpenAI-compatible endpoint (`generativelanguage.googleapis.com/v1beta/openai/chat/completions`), model `GEMINI_MODEL`, default `gemini-3.5-flash-lite`. If `GEMINI_API_KEY` is not set and `OPENAI_API_KEY` is, OpenAI chat completions with `OPENAI_MODEL`, default `gpt-4.1-mini`. This is a configuration choice, not a runtime failover |
+| Tools                    | `get_wallet_portfolio`, `execute_token_transfer`, `simulate_transaction`, `audit_contract_address`, `execute_eth_weth_rebalance`. Each maps to a function in `tools.ts`, and every write goes through `executeAction`                                                                                                                                          |
+| Bounds                   | At most 5 model rounds and 4 tool calls per request. Tool calls are serial (`parallel_tool_calls: false`). The plan stops at the first Tier 2 hold, the first block, or the first broadcast, so the model never gets a chance to resubmit a transaction                                                                                                        |
+| What the model cannot do | Sign anything; approve a pending proposal (approval exists only as an operator API call); call an untyped function; replace the stored prompt (the server overwrites `prompt` in every tool call with the operator's original text); bypass refusals for swaps, yield, staking or bridging, which are applied before the planner runs                          |
+| Without an LLM           | The demo scenarios, single wraps and transfers, portfolio reads and audits all run through the deterministic parser with no API key                                                                                                                                                                                                                            |
 
 The five dashboard scenarios use the deterministic parser. The planner is needed only for multi-step or free-form requests.
 
 ## 7. Integrations and addresses
 
-| Item | Value |
-|---|---|
-| Network | Base Sepolia, chain ID 84532 |
-| RPC | `BASE_SEPOLIA_RPC_URL`, default `https://sepolia.base.org` (15 s timeout, one retry) |
-| Explorer | `https://sepolia.basescan.org` |
-| WETH | `0x4200000000000000000000000000000000000006`, 18 decimals. `deposit`, `withdraw`, `transfer`, `balanceOf` |
-| USDC | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, 6 decimals. `transfer`, `balanceOf` |
-| Native ETH | Value transfer with empty calldata |
+| Item       | Value                                                                                                                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Network    | Base Sepolia, chain ID 84532                                                                                                                                                                                                         |
+| RPC        | `BASE_SEPOLIA_RPC_URL`, default `https://sepolia.base.org` (15 s timeout, one retry)                                                                                                                                                 |
+| Explorer   | `https://sepolia.basescan.org`                                                                                                                                                                                                       |
+| WETH       | `0x4200000000000000000000000000000000000006`, 18 decimals. `deposit`, `withdraw`, `transfer`, `balanceOf`                                                                                                                            |
+| USDC       | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, 6 decimals. `transfer`, `balanceOf`                                                                                                                                                    |
+| Native ETH | Value transfer with empty calldata                                                                                                                                                                                                   |
 | AgentGuard | Deployed per operator. The address is written to `GUARD_ADDRESS` in `.env.local` and linked from the dashboard. Deployment and transaction hashes: see the Deliverable 06 evidence export (`data/audit_log.json` → dashboard Export) |
-| Valuation | Fixed reference prices: ETH = WETH = $2,500, USDC = $1. Not an oracle |
+| Valuation  | Fixed reference prices: ETH = WETH = $2,500, USDC = $1. Not an oracle                                                                                                                                                                |
 
 No other contract can be called by the agent. There are no token approvals, no swaps and no yield integrations. A target-ratio "rebalance" between ETH and WETH uses canonical 1:1 wrapping and carries no slippage.
 
@@ -346,6 +367,7 @@ pnpm dev               # http://127.0.0.1:3000
   - `--force` redeploys; funds in the old guard then need an owner-signed call to recover.
 
   This is an operator step, so it signs with the agent key directly rather than through `executeAction`.
+
 - **Restart** `pnpm dev` after changing `.env.local`.
 
 Verification commands: `pnpm test`, `pnpm typecheck`, `pnpm build`. Live evidence requires a funded wallet. An unfunded checkout produces no transaction hashes, and the dashboard shows none.

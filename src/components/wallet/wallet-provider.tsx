@@ -21,7 +21,10 @@ import {
   type AgentMessage,
   type ProposalView,
   type Snapshot,
+  type AccountState,
 } from "./types";
+import { PinDialog } from "./pin-dialog";
+import type { RiskProfile } from "@/lib/auth/accountStore";
 
 type Wallet = ReturnType<typeof useWalletState>;
 
@@ -33,6 +36,15 @@ const SPEND_STATUSES = ["CONFIRMED", "SUBMITTED", "BROADCASTING"];
 // Shared by the dashboard and the chat route, so moving between them keeps the conversation.
 function useWalletState() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [accountState, setAccountState] = useState<AccountState>({
+    accounts: [],
+    session: { status: "LOCKED" },
+  });
+  const [stepUp, setStepUp] = useState<{
+    title: string;
+    finish: (pin: string | null) => void;
+  } | null>(null);
+  const refreshSequence = useRef(0);
   const [tab, setTab] = useState("portfolio");
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -41,11 +53,14 @@ function useWalletState() {
   const inFlight = useRef(false);
 
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
     try {
       const response = await fetch("/api/agent");
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setSnapshot(data);
+      if (sequence !== refreshSequence.current) return;
+      if (data.accounts) setAccountState(data);
+      setSnapshot(data.session?.status === "LOCKED" ? null : data);
     } catch (error) {
       setNotice((error as Error).message);
     }
@@ -58,6 +73,9 @@ function useWalletState() {
   }, [refresh]);
 
   async function request(body: unknown) {
+    if (inFlight.current)
+      throw new Error("An operation is already in progress.");
+    ++refreshSequence.current;
     inFlight.current = true;
     setBusy(true);
     setNotice("");
@@ -65,7 +83,10 @@ function useWalletState() {
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          accountId: accountState.activeAccount?.id,
+          ...(body as object),
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
@@ -73,7 +94,7 @@ function useWalletState() {
     } finally {
       inFlight.current = false;
       setBusy(false);
-      void refresh();
+      await refresh();
     }
   }
 
@@ -99,24 +120,33 @@ function useWalletState() {
   }
 
   async function send(text: string) {
+    if (accountState.session.status === "LOCKED") {
+      setNotice("Unlock an account from the account menu to continue.");
+      return;
+    }
     if (!text.trim()) return;
     await converse(text, { type: "intent", prompt: text });
   }
 
   async function decide(id: string, approve: boolean) {
+    const pin = approve ? await askPin("Authorize transaction") : undefined;
+    if (approve && pin === null) return;
     const proposal = pending.find((item) => item.id === id);
     const verb = approve ? "Approve" : "Reject";
     const intent = proposal
       ? `${verb} ${proposal.action.amount} ${proposal.action.token} to ${shortAddress(proposal.action.recipient)}`
       : `${verb} proposal`;
-    await converse(intent, { type: "approval", id, approve });
+    await converse(intent, { type: "approval", id, approve, pin });
   }
 
   async function savePolicy(policy: Policy) {
     if (inFlight.current) return;
+    const pin = await askPin("Confirm policy changes");
+    if (pin === null) return;
     try {
       await request({
         type: "policy",
+        pin,
         policy: {
           ...policy,
           whitelistedAddresses: policy.whitelistedAddresses
@@ -128,6 +158,26 @@ function useWalletState() {
     } catch (error) {
       setNotice((error as Error).message);
     }
+  }
+
+  function askPin(title: string): Promise<string | null> {
+    return new Promise((resolve) => setStepUp({ title, finish: resolve }));
+  }
+
+  async function changeAccount(
+    body:
+      | {
+          type: "account_create";
+          name: string;
+          profile: RiskProfile;
+          pin: string;
+        }
+      | { type: "account_switch"; id: string; pin: string },
+  ) {
+    await request(body);
+    setMessages([]);
+    setTrip(null);
+    setTab("portfolio");
   }
 
   function exportEvidence() {
@@ -184,9 +234,18 @@ function useWalletState() {
 
   return {
     snapshot,
+    accountState,
+    stepUp,
+    finishStepUp: (pin: string | null) => {
+      stepUp?.finish(pin);
+      setStepUp(null);
+    },
+    changeAccount,
     tab,
     setTab,
-    busy,
+    busy: busy || Boolean(stepUp),
+    authorizing: Boolean(stepUp),
+    sessionLocked: accountState.session.status === "LOCKED",
     messages,
     notice,
     setNotice,
@@ -207,7 +266,17 @@ function useWalletState() {
 export function WalletProvider({ children }: { children: ReactNode }) {
   const wallet = useWalletState();
   return (
-    <WalletContext.Provider value={wallet}>{children}</WalletContext.Provider>
+    <WalletContext.Provider value={wallet}>
+      {children}
+      {wallet.stepUp && (
+        <PinDialog
+          title={wallet.stepUp.title}
+          accountName={wallet.accountState.activeAccount?.name}
+          demo={wallet.accountState.activeAccount?.id === "master"}
+          onFinish={wallet.finishStepUp}
+        />
+      )}
+    </WalletContext.Provider>
   );
 }
 

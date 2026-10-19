@@ -25,6 +25,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 import artifact from "./guard/AgentGuard.json";
 import type { Action } from "./security/policyEngine";
+import { currentAccount } from "./auth/context";
 
 export const WETH = "0x4200000000000000000000000000000000000006";
 export const USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
@@ -85,9 +86,18 @@ function privateKey(name: string, missing: string): Hex {
 
 /** The agent EOA. It is the guard's session key and pays gas. */
 export function account() {
+  const context = currentAccount();
+  if (context) return privateKeyToAccount(context.key);
   const missing =
     "Wallet not configured. Run pnpm setup-wallets and fund the printed addresses.";
   return privateKeyToAccount(privateKey("AGENT_PRIVATE_KEY", missing));
+}
+
+/** Stable seal signer for the combined audit history, across account switches. */
+export function ledgerSigner() {
+  return privateKeyToAccount(
+    privateKey("AGENT_PRIVATE_KEY", "Master key not configured"),
+  );
 }
 
 export function wallet() {
@@ -139,6 +149,7 @@ export function transaction(a: Action): Call {
 }
 
 export function guardAddress(): Hex | null {
+  if (currentAccount()?.guard === false) return null;
   const value = process.env.GUARD_ADDRESS;
   if (!value) return null;
   // A typo must fail loudly, never fall back to the unlimited EOA path.

@@ -530,6 +530,7 @@ export function Telemetry({
         </TabsContent>
         <TabsContent value="policy">
           <PolicyControls
+            key={snapshot?.activeAccount?.id ?? "master"}
             policy={snapshot?.policy || null}
             busy={busy}
             save={savePolicy}
