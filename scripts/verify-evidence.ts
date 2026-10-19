@@ -83,6 +83,7 @@ const guardAbi = parseAbi([
   "function execute(address target, uint256 value, bytes data)",
   "function executeApproved(address target, uint256 value, bytes data, uint256 nonce, uint256 deadline, bytes signature)",
 ]);
+const ownerAbi = parseAbi(["function owner() view returns (address)"]);
 
 export function parseEvidence(raw: unknown): Evidence {
   if (Array.isArray(raw)) return { entries: raw, complete: false };
@@ -255,11 +256,23 @@ function checkGuardPath(
   }
 }
 
+// An emergency stop, and a renew after it, are sent by the guard's on-chain owner, not the agent key.
+function sentByGuardOwner(
+  entry: EvidenceEntry,
+  tx: Transaction,
+  guard: Hex | null,
+  guardOwner: Hex | undefined,
+): boolean {
+  if (entry.tier !== "SETUP" || !guard || !guardOwner) return false;
+  return sameAddress(tx.from, guardOwner) && sameAddress(tx.to, guard);
+}
+
 function checkOnChain(
   entry: EvidenceEntry,
   found: OnChain,
   signer: Hex | null,
   guard: Hex | null,
+  guardOwner?: Hex,
 ): Check {
   const { tx, receipt } = found;
   const check: Check = { problems: [], notes: [receipt.status] };
@@ -277,7 +290,13 @@ function checkOnChain(
   // The master account's transactions are sent by the same key that seals the ledger.
   const master = (entry.accountId ?? "master") === "master";
   if (master && signer && !sameAddress(tx.from, signer)) {
-    check.problems.push(`sent by ${tx.from}, not the ledger signer ${signer}`);
+    if (sentByGuardOwner(entry, tx, guard, guardOwner)) {
+      check.notes.push(`sent by guard owner ${short(guardOwner!)}`);
+    } else {
+      check.problems.push(
+        `sent by ${tx.from}, not the ledger signer ${signer}`,
+      );
+    }
   }
   if (guard) checkGuardPath(entry, found, guard, check);
   const recipient = recordedRecipient(entry);
@@ -341,7 +360,7 @@ async function checkSeal(
 
 export async function verifyEvidence(
   evidence: Evidence,
-  options: { signer?: Hex; client?: ChainReader | null } = {},
+  options: { signer?: Hex; client?: ChainReader | null; guardOwner?: Hex } = {},
 ): Promise<Report> {
   const { entries, complete } = evidence;
   const signer = expectedSigner(entries, options.signer);
@@ -378,7 +397,7 @@ export async function verifyEvidence(
               problems: [`no receipt: ${found.message.split("\n")[0]}`],
               notes: ["missing"],
             }
-          : checkOnChain(entry, found, signer, guard);
+          : checkOnChain(entry, found, signer, guard, options.guardOwner);
       problems.push(...check.problems);
       onchain = check.notes.join(", ");
       const okSoFar = receiptOk.get(entry.txHash) ?? true;
@@ -481,9 +500,20 @@ async function main() {
         ),
       });
   console.log(`Verifying ${file}`);
+  // The owner is immutable in AgentGuard, so it is read from the chain, not from the file.
+  const guard = recordedGuard(evidence.entries);
+  const guardOwner =
+    client && guard
+      ? await client.readContract({
+          address: guard,
+          abi: ownerAbi,
+          functionName: "owner",
+        })
+      : undefined;
   const report = await verifyEvidence(evidence, {
     signer: values.signer as Hex | undefined,
     client,
+    guardOwner,
   });
   printReport(report);
   if (!report.ok) process.exitCode = 1;

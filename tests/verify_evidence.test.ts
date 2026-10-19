@@ -154,4 +154,64 @@ describe("independent evidence verifier", () => {
       "ledger says CONFIRMED, receipt says reverted",
     );
   });
+
+  it("accepts an owner-sent setup step only from the guard's on-chain owner", async () => {
+    const guard: Hex = `0x${"aa".repeat(20)}`;
+    const owner = privateKeyToAccount(generatePrivateKey()).address;
+    const deployTx: Hex = `0x${"fd".repeat(32)}`;
+    const revokeTx: Hex = `0x${"fc".repeat(32)}`;
+    const l: Ledger = { logs: [], pending: [] };
+    const base = { simulation: "FIXTURE", riskScore: 0, usd: 0, tier: "SETUP" };
+    log(l, {
+      ...base,
+      intent: "FIXTURE: deploy",
+      status: "CONFIRMED",
+      txHash: deployTx,
+      reasons: [`Deployed AgentGuard at ${guard}`],
+    });
+    log(l, {
+      ...base,
+      intent: "FIXTURE: emergency stop",
+      status: "CONFIRMED",
+      txHash: revokeTx,
+      reasons: [`Sent directly by owner ${owner}`],
+    });
+    await saveLedger(l);
+    const fixture = await ledger();
+    const signer = privateKeyToAccount(mocks.key).address;
+    const client: ChainReader = {
+      getChainId: async () => 84532,
+      getTransaction: async ({ hash }) =>
+        (hash === deployTx
+          ? { from: signer, to: null, input: "0x", chainId: 84532 }
+          : {
+              from: owner,
+              to: guard,
+              input: "0xc4605d8c",
+              chainId: 84532,
+            }) as unknown as Transaction,
+      getTransactionReceipt: async ({ hash }) =>
+        ({
+          status: "success",
+          contractAddress: hash === deployTx ? guard : null,
+        }) as unknown as TransactionReceipt,
+    };
+
+    const withOwner = await verifyEvidence(parseEvidence(fixture), {
+      client,
+      guardOwner: owner,
+    });
+    expect(withOwner.ok).toBe(true);
+
+    const withoutOwner = await verifyEvidence(parseEvidence(fixture), {
+      client,
+    });
+    expect(withoutOwner.ok).toBe(false);
+
+    const wrongOwner = await verifyEvidence(parseEvidence(fixture), {
+      client,
+      guardOwner: signer,
+    });
+    expect(wrongOwner.ok).toBe(false);
+  });
 });
