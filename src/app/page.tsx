@@ -6,8 +6,11 @@ import {
 } from "@/components/wallet/console-views";
 import { PolicyControls } from "@/components/wallet/policy-controls";
 import { useWallet } from "@/components/wallet/wallet-provider";
+import { TreasuryView } from "@/components/wallet/treasury-view";
 export default function Home() {
   const { tab, snapshot, busy, sessionLocked, savePolicy } = useWallet();
+  if (tab === "treasury")
+    return <TreasuryView key={snapshot?.activeAccount?.id} />;
   if (tab === "policy")
     return (
       <PolicyControls

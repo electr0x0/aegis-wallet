@@ -458,3 +458,9 @@ The prototype is testnet-only, single-process and single-operator. It values ass
 ## Local execution pause
 
 `executionPaused` is an optional policy flag. The pure gate checks it before every write branch, including onboarding and anchors. Tier 2 approval re-reads policy and cannot override the pause. The dashboard changes the flag through the existing account-bound, PIN-protected policy API inside `exclusive()`, recording the policy hash transition. Read-only tools remain available. This is a local process control, not an on-chain key revocation.
+
+### Reserve-aware treasury workflow
+
+`src/lib/treasury/calculate.ts` derives a vault transfer from a requested maximum, a gas reserve and a selected asset. The integer calculation takes the minimum of the requested USD cap, the stored single-transaction cap, the rolling daily remainder and the reserve/runway surplus. A conservative fee projection uses twice the observed gas price at 300,000 units; it is a projection, not a fee guarantee. Guard custody and session-key gas balances are treated separately. Existing floating-point gate valuations remain a documented limitation.
+
+`previewMandate` checks chain 84532 and returns live facts, constraints and a five-minute quote. Quotes are held in server memory, capped at 200 and invalidated on process restart. `executeMandate` consumes the account-bound quote before awaiting execution. Only the server-stored action reaches `executeAction`. `Proposal.mandate` retains expiry, policy hash and reserve constraints through HITL. Revalidation runs inside `exclusive()` on execution and approval, then normal simulation, reservation and broadcast rules apply. The public operations are `treasury_preview` and `treasury_execute`; neither permits browser-supplied calldata or arbitrary destinations.

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   simulate: vi.fn(),
   balance: vi.fn(),
+  portfolio: vi.fn(),
 }));
 // PIN persistence and enforcement are exercised with the real account store in accounts.test.ts.
 vi.mock("../src/lib/auth/accountStore", () => ({
@@ -39,7 +40,7 @@ vi.mock("../src/lib/chain", () => ({
   outerCall: (call: unknown) => call,
   decodeGuardError: () => null,
   signOwnerApproval: vi.fn(),
-  portfolio: async () => ({ totalUsd: 0 }),
+  portfolio: mocks.portfolio,
   publicClient: {
     getChainId: async () => 84532,
     estimateGas: mocks.simulate,
@@ -81,8 +82,67 @@ beforeEach(() => {
   mocks.send.mockReset().mockResolvedValue("0x" + "a".repeat(64));
   mocks.simulate.mockReset().mockResolvedValue(21000n);
   mocks.balance.mockReset().mockResolvedValue(10n ** 30n);
+  mocks.portfolio.mockReset().mockResolvedValue({ totalUsd: 0 });
 });
 describe("Serialized execution and approval", () => {
+  it("rechecks persistent mandate gas constraints when a human later approves", async () => {
+    const { policyHash } = await import("../src/lib/store");
+    mocks.p.requireApproval = true;
+    const live = {
+      balances: { ETH: "0.01", WETH: "0", USDC: "10" },
+      totalUsd: 35,
+      agentGasEth: "0.01",
+      gasGwei: 1,
+      vault: action.recipient,
+      mode: "eoa",
+    };
+    mocks.portfolio.mockResolvedValue(live);
+    await executeAction(action, false, undefined, undefined, false, {
+      settings: { maxSweepUsd: "1", gasReserveEth: "0.001", asset: "USDC" },
+      policyHash: policyHash(mocks.p),
+      expiresAt: Date.now() + 60000,
+    });
+    expect(mocks.state.pending[0].mandate).toBeDefined();
+    mocks.portfolio.mockResolvedValue({ ...live, agentGasEth: "0.00001" });
+    await decide(mocks.state.pending[0].id, true);
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.state.pending[0].status).toBe("BLOCKED");
+  });
+  it("invalidates a mandate when policy changes or its review window expires", async () => {
+    const { policyHash } = await import("../src/lib/store");
+    const constraint = {
+      settings: {
+        maxSweepUsd: "1",
+        gasReserveEth: "0.001",
+        asset: "USDC" as const,
+      },
+      policyHash: policyHash(mocks.p),
+      expiresAt: Date.now() + 60000,
+    };
+    mocks.p.tier1DailyLimitUsd = 4;
+    expect(
+      (
+        await executeAction(
+          action,
+          false,
+          undefined,
+          undefined,
+          false,
+          constraint,
+        )
+      ).decision.tier,
+    ).toBe("BLOCKED");
+    expect(
+      (
+        await executeAction(action, false, undefined, undefined, false, {
+          ...constraint,
+          policyHash: policyHash(mocks.p),
+          expiresAt: 0,
+        })
+      ).decision.tier,
+    ).toBe("BLOCKED");
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
   it("reports actual stages and returned hashes while isolating disconnected observers", async () => {
     const events: ExecutionProgress[] = [];
     await withExecutionProgress(

@@ -5,6 +5,7 @@ import { keccak256, recoverMessageAddress, toBytes, type Hex } from "viem";
 import { ledgerSigner } from "./chain";
 import { currentAccountId } from "./auth/context";
 import type { Action, Decision, Policy } from "./security/policyEngine";
+import type { TreasuryConstraint } from "./treasury/calculate";
 
 export type Entry = {
   accountId?: string;
@@ -30,6 +31,7 @@ export type Entry = {
 };
 
 export type Proposal = {
+  mandate?: TreasuryConstraint;
   accountId?: string;
   id: string;
   action: Action;

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Target } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Sidebar,
@@ -31,6 +32,7 @@ import { useWallet } from "./wallet-provider";
 const DASHBOARD_VIEWS = [
   { id: "command", label: "Command Center", Icon: ScanLine },
   { id: "portfolio", label: "Portfolio & Runway", Icon: Wallet },
+  { id: "treasury", label: "Treasury mandates", Icon: Target },
   { id: "policy", label: "Guardrails & Policy", Icon: SlidersHorizontal },
   { id: "evidence", label: "Execution Evidence", Icon: ScrollText },
 ];

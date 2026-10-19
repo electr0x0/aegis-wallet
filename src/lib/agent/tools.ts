@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { reportProgress } from "./progress";
+import {
+  calculateSweep,
+  spentUnits,
+  type TreasuryConstraint,
+} from "../treasury/calculate";
 import { BaseError, formatUnits, isAddress, parseUnits, zeroHash } from "viem";
 import { z } from "zod";
 import {
@@ -477,6 +482,7 @@ export async function executeAction(
   approvalId?: string,
   pin?: string,
   operatorAnchor = false,
+  mandate?: TreasuryConstraint,
 ) {
   return exclusive(async () => {
     const schema = operatorAnchor ? anchorSchema : actionSchema;
@@ -539,6 +545,19 @@ export async function executeAction(
       Boolean(currentProposal),
       onboardingRecipient,
     );
+    const constraint = currentProposal?.mandate ?? mandate;
+    if (constraint && check.decision.tier !== "BLOCKED") {
+      const violation = await mandateViolation(a, constraint, fresh, p);
+      if (violation) {
+        check.decision = blocked(violation);
+        check.rationale = `BLOCKED: treasury mandate no longer holds. ${violation}. Nothing was signed.`;
+        reportProgress({
+          stage: "policy",
+          status: "failed",
+          message: violation,
+        });
+      }
+    }
     const base = baseEntry(a, check, p);
     if (a.kind === "fund_account" && check.decision.tier !== "TIER_1_AUTO") {
       check.decision = blocked(
@@ -567,6 +586,7 @@ export async function executeAction(
         accountId: currentAccountId(),
         id,
         action: a,
+        ...(constraint ? { mandate: constraint } : {}),
         decision: check.decision,
         usd: check.usd,
         gasEstimate: check.gasEstimate,
@@ -585,6 +605,43 @@ export async function executeAction(
     }
     return broadcast(fresh, a, check, base, currentProposal);
   });
+}
+
+// Runs under executeAction's mutex, including when a held proposal is approved later.
+async function mandateViolation(
+  a: Action,
+  constraint: TreasuryConstraint,
+  l: Ledger,
+  p: Policy,
+) {
+  if (Date.now() > constraint.expiresAt)
+    return "Treasury preview expired; create a fresh preview";
+  if (policyHash(p) !== constraint.policyHash)
+    return "Policy changed after the treasury preview";
+  try {
+    const result = calculateSweep(
+      constraint.settings,
+      await portfolio(),
+      p,
+      spentUnits(l.logs, currentAccountId()),
+    );
+    const allowed = result.action;
+    if (!allowed) return result.reasons.join(" ");
+    if (
+      a.kind !== "transfer_token" ||
+      a.token !== allowed.token ||
+      a.recipient.toLowerCase() !== allowed.recipient.toLowerCase()
+    )
+      return "Treasury action no longer matches the vault or selected asset";
+    if (
+      parseUnits(a.amount, tokenDecimals(a.token)) >
+      parseUnits(allowed.amount, tokenDecimals(a.token))
+    )
+      return "Available balance, gas reserve, budget or runway surplus decreased";
+    return null;
+  } catch {
+    return "Live treasury constraints could not be verified; preview again";
+  }
 }
 
 export async function decide(id: string, approve: boolean, pin?: string) {

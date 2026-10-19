@@ -27,6 +27,10 @@ import { PinDialog } from "./pin-dialog";
 import type { RiskProfile } from "@/lib/auth/accountStore";
 import type { ExecutionProgress } from "@/lib/agent/progress";
 import { readExecutionStream } from "./read-execution";
+import type {
+  MandateSettings,
+  SweepCalculation,
+} from "@/lib/treasury/calculate";
 
 type Wallet = ReturnType<typeof useWalletState>;
 
@@ -89,7 +93,7 @@ function useWalletState() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: ["intent", "approval"].includes(
+          Accept: ["intent", "approval", "treasury_execute"].includes(
             (body as { type: string }).type,
           )
             ? "application/x-ndjson"
@@ -316,6 +320,20 @@ function useWalletState() {
     decide,
     savePolicy,
     exportEvidence,
+    previewTreasury: (settings: MandateSettings) =>
+      request({ type: "treasury_preview", settings }) as Promise<
+        SweepCalculation & {
+          id: string | null;
+          expiresAt: number;
+          policyHash: string;
+          accountId: string;
+        }
+      >,
+    executeTreasury: (id: string) =>
+      converse("Execute the reviewed treasury mandate", {
+        type: "treasury_execute",
+        id,
+      }),
   };
 }
 

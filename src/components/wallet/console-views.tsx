@@ -27,6 +27,7 @@ import type { Treasury } from "@/lib/security/policyEngine";
 export const VIEW_LABELS: Record<string, string> = {
   command: "Command Center",
   portfolio: "Portfolio & Runway",
+  treasury: "Treasury mandates",
   policy: "Guardrails & Policy",
   evidence: "Execution Evidence",
 };

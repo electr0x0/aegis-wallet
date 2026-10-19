@@ -4,6 +4,8 @@ import { z } from "zod";
 import { runIntent } from "@/lib/agent/runner";
 import { withExecutionProgress } from "@/lib/agent/progress";
 import { autoDrip, decide } from "@/lib/agent/tools";
+import { executeMandate, previewMandate } from "@/lib/treasury/mandates";
+import { mandateSchema } from "@/lib/treasury/calculate";
 import {
   createAgentAccount,
   listAccounts,
@@ -72,6 +74,16 @@ const policySchema = z.object({
 });
 
 const postSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("treasury_preview"),
+    accountId: z.string(),
+    settings: mandateSchema,
+  }),
+  z.object({
+    type: z.literal("treasury_execute"),
+    accountId: z.string(),
+    id: z.string().uuid(),
+  }),
   z.object({
     type: z.literal("intent"),
     accountId: z.string(),
@@ -255,7 +267,7 @@ export async function POST(req: NextRequest) {
       );
     if (
       req.headers.get("accept")?.includes("application/x-ndjson") &&
-      body.type !== "policy"
+      ["intent", "approval", "treasury_execute"].includes(body.type)
     ) {
       let connected = true;
       const encoder = new TextEncoder();
@@ -280,7 +292,11 @@ export async function POST(req: NextRequest) {
                   const result =
                     body.type === "intent"
                       ? await runIntent(body.prompt)
-                      : await decide(body.id, body.approve, body.pin);
+                      : body.type === "approval"
+                        ? await decide(body.id, body.approve, body.pin)
+                        : body.type === "treasury_execute"
+                          ? await executeMandate(body.id)
+                          : null;
                   send({ type: "result", result });
                 } catch (e) {
                   send({ type: "error", error: (e as Error).message });
@@ -309,6 +325,10 @@ export async function POST(req: NextRequest) {
     return await withAccount(context, async () => {
       let result: unknown;
       if (body.type === "intent") result = await runIntent(body.prompt);
+      else if (body.type === "treasury_preview")
+        result = await previewMandate(body.settings);
+      else if (body.type === "treasury_execute")
+        result = await executeMandate(body.id);
       else if (body.type === "approval")
         result = await decide(body.id, body.approve, body.pin);
       else result = await updatePolicy(body.policy, body.pin);
