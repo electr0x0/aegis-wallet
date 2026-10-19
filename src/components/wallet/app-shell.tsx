@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { MessageSquare, X } from "lucide-react";
 import { MotionConfig } from "framer-motion";
 import { AccountSwitcher } from "@/components/AccountSwitcher";
+import { Breadcrumbs } from "@/components/godui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -22,7 +23,8 @@ import { SecurityBanner } from "./security-banner";
 import { useWallet } from "./wallet-provider";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { tab, trip, setTrip, snapshot, notice, setNotice } = useWallet();
+  const { tab, setTab, trip, setTrip, snapshot, notice, setNotice } =
+    useWallet();
   const [mobile, setMobile] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   useEffect(() => {
@@ -44,13 +46,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <header className="app-header">
               <div className="header-identity">
                 <SidebarTrigger />
-                <nav aria-label="Breadcrumb" className="breadcrumb">
-                  <span>Workspace</span>
-                  <span aria-hidden="true">/</span>
-                  <span aria-current="page">
-                    {VIEW_LABELS[tab] ?? VIEW_LABELS.command}
-                  </span>
-                </nav>
+                <Breadcrumbs
+                  className="min-w-0"
+                  items={[
+                    { label: "Workspace", href: "/" },
+                    { label: VIEW_LABELS[tab] ?? VIEW_LABELS.command },
+                  ]}
+                  onNavigate={() => setTab("command")}
+                />
               </div>
               <div className="header-actions">
                 <Button
@@ -70,15 +73,18 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <TelemetryRibbon />
                 <div className="stage-scroll" key={tab}>
                   {snapshot?.error && (
-                    <div className="setup-banner" role="status">
+                    <div
+                      className="mb-4 rounded-lg border border-[var(--amber-line)] bg-[var(--amber-tint)] p-3 text-xs leading-relaxed [overflow-wrap:anywhere]"
+                      role="status"
+                    >
                       <b>Wallet connection needs attention</b>
                       <p>{snapshot.error}</p>
                     </div>
                   )}
                   {snapshot?.activeAccount &&
                     snapshot.activeAccount.id !== "master" && (
-                      <details className="funding-notice">
-                        <summary>
+                      <details className="mb-4 rounded-lg border bg-accent p-3 text-xs leading-relaxed [overflow-wrap:anywhere]">
+                        <summary className="cursor-pointer">
                           Onboarding gas:{" "}
                           {snapshot.activeAccount.drip.status
                             .toLowerCase()
@@ -87,7 +93,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         <p>{snapshot.activeAccount.drip.reason}</p>
                         {snapshot.activeAccount.drip.txHash && (
                           <a
-                            className="transaction-link"
+                            className="inline-flex text-primary hover:underline"
                             href={`https://sepolia.basescan.org/tx/${snapshot.activeAccount.drip.txHash}`}
                             target="_blank"
                             rel="noreferrer"
@@ -107,7 +113,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                     />
                   )}
                   {notice && (
-                    <div className="notice-banner" role="status">
+                    <div
+                      className="mb-4 flex items-start justify-between gap-2 rounded-lg border bg-accent p-3 text-xs leading-relaxed [overflow-wrap:anywhere]"
+                      role="status"
+                    >
                       <p>{notice}</p>
                       <Button
                         variant="ghost"

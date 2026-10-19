@@ -57,11 +57,14 @@ export function AppSidebar() {
               className="hover:bg-transparent"
             >
               <Link href="/" onClick={close}>
-                <span className="brand-mark">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background">
                   <ShieldCheck size={17} />
                 </span>
-                <span className="sidebar-brand">
-                  aegis<span>wallet</span>
+                <span className="text-base font-semibold tracking-tight">
+                  aegis
+                  <span className="font-normal text-muted-foreground">
+                    wallet
+                  </span>
                 </span>
               </Link>
             </SidebarMenuButton>
@@ -98,7 +101,9 @@ export function AppSidebar() {
               asChild
             >
               <div>
-                <span className="operator-avatar">AS</span>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-accent text-[10px] font-semibold text-primary">
+                  AS
+                </span>
                 <span className="flex flex-col gap-0.5">
                   <span>Local operator</span>
                   <span className="text-xs text-muted-foreground">

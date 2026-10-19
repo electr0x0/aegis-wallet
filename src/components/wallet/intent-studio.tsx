@@ -14,16 +14,22 @@ export function IntentStudio({ onClose }: { onClose?: () => void }) {
       : (accountState.session.tier1 ?? "UNAVAILABLE");
   return (
     <aside
-      className="copilot-panel"
+      className="copilot-panel flex h-full min-h-0 shrink-0 flex-col border-l bg-background"
       data-expanded={expanded}
       aria-label="Intent Studio copilot"
     >
-      <header className="copilot-header">
+      <header className="flex h-14 min-h-14 shrink-0 items-center justify-between gap-1.5 border-b pr-3 pl-4">
         <div className="min-w-0">
-          <h2>
-            Intent Studio <span>· Autonomous Agent</span>
+          <h2 className="whitespace-nowrap text-xs font-semibold">
+            Intent Studio{" "}
+            <span className="text-[10px] font-normal text-muted-foreground max-[760px]:hidden">
+              · Autonomous Agent
+            </span>
           </h2>
-          <span className="copilot-session" data-active={status === "ACTIVE"}>
+          <span
+            className="font-mono text-[9px] text-muted-foreground data-[active=true]:text-primary"
+            data-active={status === "ACTIVE"}
+          >
             Session: {status}
           </span>
         </div>
@@ -31,6 +37,7 @@ export function IntentStudio({ onClose }: { onClose?: () => void }) {
           <Button
             size="sm"
             variant="ghost"
+            className="px-2 text-[10px]"
             disabled={busy || !messages.length}
             onClick={clearThread}
           >

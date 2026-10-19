@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@/lib/utils";
 
 export type SpotlightCardProps = React.HTMLAttributes<HTMLDivElement> & {
   /** Color of the spotlight glow. Accepts any CSS color. */
@@ -58,7 +59,7 @@ const SpotlightCard = React.forwardRef<HTMLDivElement, SpotlightCardProps>(
         ref={ref}
         data-slot="spotlight-card"
         onPointerMove={handlePointerMove}
-        className={`${ROOT_BASE} ${className ?? ""}`}
+        className={cn(ROOT_BASE, className)}
         style={{
           ["--spotlight-color" as string]: glowColor,
           ["--spotlight-radius" as string]: `${radius}px`,

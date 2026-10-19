@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import * as React from "react";
+import { cn } from "@/lib/utils";
 
 export type PromptSuggestionsVariant = "grid" | "chips" | "list";
 
@@ -24,6 +25,8 @@ export type PromptSuggestionsProps = Omit<
   suggestions: PromptSuggestion[];
   onSelect?: (suggestion: PromptSuggestion) => void;
   variant?: PromptSuggestionsVariant;
+  /** Local integration: dense chips for a docked operator console. */
+  compact?: boolean;
   /** Render shimmer skeletons instead of items. */
   loading?: boolean;
   /** Number of skeletons while loading. */
@@ -45,6 +48,7 @@ const PromptSuggestions = React.forwardRef<
       suggestions,
       onSelect,
       variant = "grid",
+      compact = false,
       loading = false,
       skeletonCount = 4,
       className,
@@ -120,11 +124,15 @@ const PromptSuggestions = React.forwardRef<
                   focusItem(index - 1);
                 }
               }}
-              className={
+              className={cn(
                 isChip
                   ? "group inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-foreground shadow-2xs transition-[transform,background-color,border-color] hover:-translate-y-px hover:border-ring hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  : "group flex items-start gap-2.5 rounded-xl border border-border bg-card p-3 text-left shadow-2xs transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-ring hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              }
+                  : "group flex items-start gap-2.5 rounded-xl border border-border bg-card p-3 text-left shadow-2xs transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-ring hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                compact &&
+                  isChip &&
+                  "max-w-full rounded-md px-2.5 py-1.5 shadow-none",
+                "disabled:pointer-events-none disabled:opacity-50",
+              )}
             >
               {suggestion.icon ? (
                 <span
@@ -135,7 +143,10 @@ const PromptSuggestions = React.forwardRef<
               ) : null}
               <span className="min-w-0">
                 <span
-                  className={`block truncate text-sm font-medium text-foreground ${isChip ? "" : ""}`}
+                  className={cn(
+                    "block truncate text-sm font-medium text-foreground",
+                    compact && "text-[11px] font-normal",
+                  )}
                 >
                   {suggestion.label}
                 </span>

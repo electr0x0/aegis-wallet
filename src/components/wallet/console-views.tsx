@@ -6,6 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { SpotlightCard } from "@/components/godui/spotlight-card";
+import { BentoCard, BentoGrid } from "@/components/godui/bento-grid";
+import {
+  AgentStep,
+  AgentTimeline,
+  type StepStatus,
+} from "@/components/godui/agent-timeline";
+import { FilterBar, type FilterValue } from "@/components/godui/filter-bar";
+import { NumberTicker } from "@/components/godui/number-ticker";
+import { cn } from "@/lib/utils";
 import { ApprovalCard } from "./approval-card";
 import { GuardPanel } from "./guard-panel";
 import { SealBadge, VerificationBadge } from "./ledger-badges";
@@ -21,14 +30,7 @@ export const VIEW_LABELS: Record<string, string> = {
   policy: "Guardrails & Policy",
   evidence: "Execution Evidence",
 };
-const TIERS = [
-  "ALL",
-  "TIER_0",
-  "TIER_1_AUTO",
-  "TIER_2_HITL",
-  "BLOCKED",
-  "SETUP",
-];
+const TIERS = ["TIER_0", "TIER_1_AUTO", "TIER_2_HITL", "BLOCKED", "SETUP"];
 const tierName = (tier: string) =>
   ({
     TIER_0: "Tier 0",
@@ -38,6 +40,23 @@ const tierName = (tier: string) =>
     SETUP: "Setup",
   })[tier] ?? tier.replaceAll("_", " ");
 const readable = (s: string) => s.replaceAll("_", " ");
+
+function auditStepStatus(status: string): StepStatus {
+  if (["CONFIRMED", "COMPLETED", "TIER_2_AUTH_SUCCESS"].includes(status))
+    return "success";
+  if (
+    [
+      "BLOCKED",
+      "REVERTED",
+      "REVERTED_BY_GUARD",
+      "REJECTED",
+      "TIER_2_AUTH_FAILED",
+    ].includes(status)
+  )
+    return "error";
+  // Submitted and unresolved operations are never presented as successful.
+  return "pending";
+}
 
 export function ConsoleCard({
   title,
@@ -51,18 +70,29 @@ export function ConsoleCard({
   className?: string;
 }) {
   return (
-    <section className={`console-card ${className}`}>
-      <header className="console-card-header">
-        <h2>{title}</h2>
+    <BentoCard className={cn("min-w-0 p-0", className)}>
+      <header className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b px-4 py-2">
+        <h2 className="text-xs font-semibold">{title}</h2>
         {action}
       </header>
-      <div className="console-card-body">{children}</div>
-    </section>
+      <div className="min-w-0 flex-1 p-4">{children}</div>
+    </BentoCard>
   );
 }
 export function TierBadge({ tier }: { tier: string }) {
   return (
-    <span className="tier-badge" data-tier={tier}>
+    <span
+      className={cn(
+        "inline-flex whitespace-nowrap rounded-md border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground",
+        tier === "TIER_1_AUTO" &&
+          "border-[var(--emerald-line)] bg-accent text-primary",
+        tier === "TIER_2_HITL" &&
+          "border-[var(--amber-line)] bg-[var(--amber-tint)] text-[var(--amber)]",
+        tier === "BLOCKED" &&
+          "border-[var(--red-line)] bg-[var(--red-tint)] text-destructive",
+      )}
+      data-tier={tier}
+    >
       {tierName(tier)}
     </span>
   );
@@ -70,7 +100,7 @@ export function TierBadge({ tier }: { tier: string }) {
 export function TransactionLink({ hash }: { hash?: string }) {
   return hash ? (
     <a
-      className="transaction-link"
+      className="inline-flex items-center gap-1 font-mono text-[10px] text-primary [overflow-wrap:anywhere] hover:underline"
       href={`${EXPLORER}/tx/${hash}`}
       target="_blank"
       rel="noreferrer"
@@ -101,18 +131,21 @@ function WalletOverview() {
         </Button>
       }
     >
-      <SpotlightCard className="wallet-card" glowColor="rgba(255,255,255,.08)">
+      <SpotlightCard
+        className="wallet-card rounded-lg border-transparent bg-foreground p-3.5 text-background"
+        glowColor="rgba(255,255,255,.08)"
+      >
         <div className="flex items-center justify-between gap-2">
-          <h3>
+          <h3 className="text-xs font-medium">
             {live?.mode === "guard" ? "AgentGuard treasury" : "Agent wallet"}
           </h3>
-          <span className="wallet-status">
+          <span className="font-mono text-[9px] text-emerald-200">
             {!snapshot ? "CONNECTING" : live ? "CONNECTED" : "UNAVAILABLE"}
           </span>
         </div>
         {live ? (
           <a
-            className="wallet-link"
+            className="mt-2.5 inline-flex items-center gap-2 font-mono text-xs"
             href={`${EXPLORER}/address/${live.address}`}
             target="_blank"
             rel="noreferrer"
@@ -130,26 +163,40 @@ function WalletOverview() {
             `· Gas ${Number(live.agentGasEth).toFixed(6)} ETH`}
         </p>
       </SpotlightCard>
-      <div className="asset-heading">
+      <div className="mt-4 mb-1 flex justify-between gap-2 text-[9px] tracking-wide text-muted-foreground uppercase">
         <span>Asset</span>
         <span>Balance / reference value</span>
       </div>
       {["ETH", "WETH", "USDC"].map((token, i) => (
-        <div key={token} className="asset-row">
-          <span className={`coin coin-${i}`}>
+        <div
+          key={token}
+          className="flex items-center gap-2 border-b py-2.5 text-xs"
+        >
+          <span
+            className={cn(
+              "grid size-7 shrink-0 place-items-center rounded-full text-xl",
+              [
+                "bg-slate-100 text-slate-600",
+                "bg-purple-50 text-purple-600",
+                "bg-blue-50 text-blue-600",
+              ][i],
+            )}
+          >
             {token === "USDC" ? "$" : "Ξ"}
           </span>
           <div>
-            <b>{token}</b>
-            <small>{["Ethereum", "Wrapped Ethereum", "USD Coin"][i]}</small>
+            <b className="font-medium">{token}</b>
+            <small className="mt-0.5 block text-[10px] text-muted-foreground">
+              {["Ethereum", "Wrapped Ethereum", "USD Coin"][i]}
+            </small>
           </div>
-          <div className="asset-balance">
-            <b>
+          <div className="ml-auto text-right font-mono">
+            <b className="font-medium">
               {live
                 ? Number(live.balances[token]).toFixed(token === "USDC" ? 2 : 6)
                 : "—"}
             </b>
-            <small>
+            <small className="mt-0.5 block text-[10px] text-muted-foreground">
               {live
                 ? formatUsd(
                     Number(live.balances[token]) *
@@ -171,9 +218,24 @@ function AssetAllocation() {
   const live = snapshot?.portfolio;
   return (
     <ConsoleCard title="Asset allocation">
-      <p className="allocation-total">
-        {live ? formatUsd(live.totalUsd) : "—"}
-        <span>Reference portfolio value</span>
+      <p className="mt-1 mb-6 text-[27px] font-semibold tracking-tight">
+        {live ? (
+          <>
+            $
+            <NumberTicker
+              key={live.totalUsd}
+              value={live.totalUsd}
+              startValue={live.totalUsd}
+              decimalPlaces={2}
+              className="tracking-tight"
+            />
+          </>
+        ) : (
+          "—"
+        )}
+        <span className="mt-1 block text-[11px] font-normal tracking-normal text-muted-foreground">
+          Reference portfolio value
+        </span>
       </p>
       <div className="space-y-5">
         {["ETH", "WETH", "USDC"].map((token, i) => {
@@ -193,7 +255,14 @@ function AssetAllocation() {
                 </span>
               </div>
               <Progress
-                className={`allocation-progress allocation-${i}`}
+                className={cn(
+                  "h-1.5",
+                  [
+                    "[&_[data-slot=progress-indicator]]:bg-slate-500",
+                    "[&_[data-slot=progress-indicator]]:bg-purple-400",
+                    "",
+                  ][i],
+                )}
                 aria-label={`${token} allocation`}
                 value={pct}
               />
@@ -215,7 +284,13 @@ export function PendingApprovals() {
     <ConsoleCard
       title="Pending Tier 2 approvals"
       action={
-        <span className="count-badge" data-alert={pending.length > 0}>
+        <span
+          className={cn(
+            "rounded-md border bg-muted px-2 py-0.5 font-mono text-[10px]",
+            pending.length > 0 &&
+              "border-[var(--amber-line)] bg-[var(--amber-tint)] text-[var(--amber)]",
+          )}
+        >
           {pending.length}
         </span>
       }
@@ -232,10 +307,12 @@ export function PendingApprovals() {
           />
         ))
       ) : (
-        <div className="empty-console">
+        <div className="flex min-h-32 flex-col items-center justify-center gap-2 p-5 text-center text-xs text-muted-foreground">
           <ShieldCheck size={24} />
-          <p>No approvals waiting</p>
-          <span>Transactions that need your judgment appear here.</span>
+          <p className="font-medium text-foreground">No approvals waiting</p>
+          <span className="max-w-56 text-[11px]">
+            Transactions that need your judgment appear here.
+          </span>
         </div>
       )}
     </ConsoleCard>
@@ -254,46 +331,54 @@ function RecentEvents() {
       }
     >
       {!recent.length ? (
-        <p className="empty-console">
+        <p className="py-8 text-center text-xs text-muted-foreground">
           No audit events recorded for this account.
         </p>
       ) : (
-        <ol className="recent-events">
-          {recent.map((entry) => (
-            <li key={entry.id}>
-              <div className="flex items-center justify-between gap-2">
-                <TierBadge tier={entry.tier} />
-                <time className="font-mono text-[11px] text-muted-foreground">
+        <AgentTimeline aria-label="Recent audit events">
+          {recent.map((entry, index) => (
+            <AgentStep
+              key={entry.id}
+              status={auditStepStatus(entry.status)}
+              last={index === recent.length - 1}
+              title={<span className="text-xs">{entry.intent}</span>}
+              meta={
+                <time
+                  dateTime={entry.timestamp}
+                  className="font-mono text-[10px]"
+                >
                   {new Date(entry.timestamp).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
                 </time>
+              }
+            >
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <TierBadge tier={entry.tier} />
+                <span className="text-[10px]">{readable(entry.status)}</span>
               </div>
-              <p className="mt-2 break-words text-xs">{entry.intent}</p>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-                <span>{readable(entry.status)}</span>
-                <TransactionLink hash={entry.txHash} />
-              </div>
-            </li>
+              <p>{entry.rationale ?? entry.reasons.join("; ")}</p>
+              <TransactionLink hash={entry.txHash} />
+            </AgentStep>
           ))}
-        </ol>
+        </AgentTimeline>
       )}
     </ConsoleCard>
   );
 }
 export function CommandCenter() {
   return (
-    <div className="command-grid">
-      <div className="console-column">
+    <BentoGrid columns={2} className="console-grid items-start auto-rows-auto">
+      <div className="flex min-w-0 flex-col gap-4">
         <WalletOverview />
         <PendingApprovals />
       </div>
-      <div className="console-column">
+      <div className="flex min-w-0 flex-col gap-4">
         <AssetAllocation />
         <RecentEvents />
       </div>
-    </div>
+    </BentoGrid>
   );
 }
 function RunwayCalculator() {
@@ -307,7 +392,7 @@ function RunwayCalculator() {
         Preview reserve changes. These inputs do not change your saved
         permission policy.
       </p>
-      <div className="runway-inputs">
+      <div className="grid grid-cols-1 gap-2 @min-[521px]:grid-cols-3">
         {(
           [
             ["fiatReserveUsd", "Fiat reserve (USD)"],
@@ -352,16 +437,16 @@ export function PortfolioView() {
   const { snapshot } = useWallet();
   const live = snapshot?.portfolio ?? null;
   return (
-    <div className="portfolio-grid">
-      <div className="console-column">
+    <BentoGrid columns={2} className="console-grid items-start auto-rows-auto">
+      <div className="flex min-w-0 flex-col gap-4">
         <WalletOverview />
         <ConsoleCard title="Custody & session guard">
           <GuardPanel guard={snapshot?.guard} live={live} loading={!snapshot} />
-          <div className="vault-card">
+          <div className="mt-4 border-t pt-4">
             <p className="section-label">Whitelisted savings vault</p>
             {live?.vault ? (
               <a
-                className="transaction-link break-all"
+                className="mt-2 inline-flex items-center gap-1 break-all font-mono text-[10px] text-primary hover:underline"
                 href={`${EXPLORER}/address/${live.vault}`}
                 target="_blank"
                 rel="noreferrer"
@@ -381,31 +466,67 @@ export function PortfolioView() {
           </div>
         </ConsoleCard>
       </div>
-      <div className="console-column">
+      <div className="flex min-w-0 flex-col gap-4">
         <AssetAllocation />
         <RunwayCalculator />
       </div>
-    </div>
+    </BentoGrid>
   );
 }
 export function EvidenceView() {
   const { snapshot, exportEvidence } = useWallet();
-  const [tier, setTier] = useState("ALL");
+  const [filters, setFilters] = useState<FilterValue>({});
   const [search, setSearch] = useState("");
-  const logs = [...(snapshot?.ledger.logs ?? [])]
+  const all = snapshot?.ledger.logs ?? [];
+  const facets = [
+    {
+      id: "tier",
+      label: "Permission tier",
+      options: TIERS.map((value) => ({
+        value,
+        label: tierName(value),
+        count: all.filter((e) => e.tier === value).length,
+      })),
+    },
+    {
+      id: "status",
+      label: "Status",
+      options: [...new Set(all.map((e) => e.status))].sort().map((value) => ({
+        value,
+        label: readable(value),
+        count: all.filter((e) => e.status === value).length,
+      })),
+    },
+    {
+      id: "simulation",
+      label: "Pre-flight",
+      options: [...new Set(all.map((e) => e.simulation))]
+        .sort()
+        .map((value) => ({
+          value,
+          label: readable(value),
+          count: all.filter((e) => e.simulation === value).length,
+        })),
+    },
+  ];
+  const logs = [...all]
     .reverse()
     .filter(
       (entry) =>
-        (tier === "ALL" || entry.tier === tier) &&
+        Object.entries(filters).every(
+          ([key, values]) =>
+            !values.length ||
+            values.includes(entry[key as "tier" | "status" | "simulation"]),
+        ) &&
         `${entry.intent} ${entry.status} ${entry.txHash ?? ""}`
           .toLowerCase()
           .includes(search.toLowerCase()),
     );
   return (
-    <div className="evidence-view">
-      <div className="view-title-row">
+    <div className="min-w-0">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1>Execution Evidence</h1>
+          <h1 className="text-lg font-semibold">Execution Evidence</h1>
           <p className="supporting-copy">
             Deliverable 06 · sealed decisions and Base Sepolia receipts
           </p>
@@ -416,26 +537,22 @@ export function EvidenceView() {
         </Button>
       </div>
       <VerificationBadge verification={snapshot?.verification} />
-      <div className="evidence-filters" aria-label="Filter evidence by tier">
-        {TIERS.map((value) => (
-          <Button
-            key={value}
-            size="sm"
-            variant={tier === value ? "default" : "outline"}
-            aria-pressed={tier === value}
-            onClick={() => setTier(value)}
-          >
-            {value === "ALL" ? "All tiers" : tierName(value)}
-          </Button>
-        ))}
+      <div className="my-4 flex flex-wrap items-center gap-3">
+        <FilterBar
+          aria-label="Filter execution evidence"
+          facets={facets}
+          value={filters}
+          onChange={setFilters}
+        />
         <Input
           aria-label="Search audit events"
           placeholder="Search intent, status or hash…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          className="h-8 min-w-44 flex-1 basis-52 text-xs"
         />
       </div>
-      <div className="evidence-table-scroll">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <table className="evidence-table">
           <caption className="sr-only">Account execution evidence</caption>
           <thead>
@@ -455,7 +572,7 @@ export function EvidenceView() {
           </tbody>
         </table>
         {!logs.length && (
-          <div className="empty-console">
+          <div className="p-8 text-center text-xs text-muted-foreground">
             No audit events match this filter.
           </div>
         )}

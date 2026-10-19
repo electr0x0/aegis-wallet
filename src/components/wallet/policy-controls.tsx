@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConsoleCard } from "./console-views";
 import type { Policy } from "@/lib/security/policyEngine";
 export function PolicyControls({
   policy,
@@ -57,113 +58,129 @@ export function PolicyControls({
   ] as const;
   return (
     <form
-      className="policy-form"
+      className="min-w-0"
       onSubmit={(event) => {
         event.preventDefault();
         void save(draft);
       }}
     >
-      <h2 className="text-sm font-medium">Permission guardrails</h2>
-      <p className="supporting-copy mt-2">
-        Your rules, enforced before every broadcast.
-      </p>
-      <fieldset disabled={busy} className="policy-fields">
-        {controls.map((control) => (
-          <div key={control.key}>
-            <div className="flex items-center justify-between gap-4">
-              <label htmlFor={control.key} className="text-xs font-medium">
-                {control.label}
-              </label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id={control.key}
-                  type="number"
-                  min={control.key === "maxGasGwei" ? 0.01 : 0}
-                  max={control.key === "maxGasGwei" ? 1000 : 10000}
-                  step="0.01"
-                  required
-                  value={draft[control.key]}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      [control.key]: Number(event.target.value),
-                    })
-                  }
-                  className="h-8 w-20 text-right font-mono text-xs"
-                />
-                <span className="unit-label">{control.unit}</span>
+      <ConsoleCard title="Permission guardrails">
+        <p className="supporting-copy mt-2">
+          Your rules, enforced before every broadcast.
+        </p>
+        <fieldset
+          disabled={busy}
+          className="mt-6 grid min-w-0 grid-cols-1 gap-6 @min-[521px]:grid-cols-2"
+        >
+          {controls.map((control) => (
+            <div
+              key={control.key}
+              className={control.key === "maxGasGwei" ? "col-span-full" : ""}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <label htmlFor={control.key} className="text-xs font-medium">
+                  {control.label}
+                </label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={control.key}
+                    type="number"
+                    min={control.key === "maxGasGwei" ? 0.01 : 0}
+                    max={control.key === "maxGasGwei" ? 1000 : 10000}
+                    step="0.01"
+                    required
+                    value={draft[control.key]}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        [control.key]: Number(event.target.value),
+                      })
+                    }
+                    className="h-8 w-20 text-right font-mono text-xs"
+                  />
+                  <span className="w-7 font-mono text-[9px] text-muted-foreground">
+                    {control.unit}
+                  </span>
+                </div>
               </div>
+              <Slider
+                disabled={busy}
+                aria-label={`${control.label} slider`}
+                min={control.key === "maxGasGwei" ? 1 : 0}
+                max={Math.max(control.max, draft[control.key])}
+                step={control.step}
+                value={[draft[control.key]]}
+                onValueChange={([value]) =>
+                  setDraft({ ...draft, [control.key]: value })
+                }
+                className="my-4"
+              />
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {control.help}
+              </p>
             </div>
-            <Slider
+          ))}
+          {(
+            [
+              ["whitelistedAddresses", "Whitelisted addresses"],
+              ["blacklistedAddresses", "Blacklisted addresses"],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key}>
+              <label htmlFor={key} className="text-xs font-medium">
+                {label}
+              </label>
+              <Textarea
+                id={key}
+                rows={5}
+                value={draft[key].join("\n")}
+                onChange={(e) =>
+                  setDraft({ ...draft, [key]: e.target.value.split("\n") })
+                }
+                className="mt-3 min-h-28 font-mono text-[11px]"
+              />
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                One complete address per line.
+                {key === "blacklistedAddresses"
+                  ? " Blacklist takes precedence over the whitelist."
+                  : ""}
+              </p>
+            </div>
+          ))}
+          <div className="col-span-full flex items-center justify-between gap-4 rounded-lg border bg-muted/30 p-3.5">
+            <div>
+              <label
+                htmlFor="human-confirmation"
+                className="text-xs font-medium"
+              >
+                Always ask before signing
+              </label>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Require human approval for every write.
+              </p>
+            </div>
+            <Switch
               disabled={busy}
-              aria-label={`${control.label} slider`}
-              min={control.key === "maxGasGwei" ? 1 : 0}
-              max={Math.max(control.max, draft[control.key])}
-              step={control.step}
-              value={[draft[control.key]]}
-              onValueChange={([value]) =>
-                setDraft({ ...draft, [control.key]: value })
+              id="human-confirmation"
+              checked={draft.requireApproval}
+              onCheckedChange={(checked) =>
+                setDraft({ ...draft, requireApproval: checked })
               }
-              className="my-4"
             />
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              {control.help}
-            </p>
           </div>
-        ))}
-        {(
-          [
-            ["whitelistedAddresses", "Whitelisted addresses"],
-            ["blacklistedAddresses", "Blacklisted addresses"],
-          ] as const
-        ).map(([key, label]) => (
-          <div key={key}>
-            <label htmlFor={key} className="text-xs font-medium">
-              {label}
-            </label>
-            <Textarea
-              id={key}
-              rows={5}
-              value={draft[key].join("\n")}
-              onChange={(e) =>
-                setDraft({ ...draft, [key]: e.target.value.split("\n") })
-              }
-              className="mt-3 min-h-28 font-mono text-[11px]"
-            />
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              One complete address per line.
-              {key === "blacklistedAddresses"
-                ? " Blacklist takes precedence over the whitelist."
-                : ""}
-            </p>
-          </div>
-        ))}
-        <div className="confirmation-setting">
-          <div>
-            <label htmlFor="human-confirmation" className="text-xs font-medium">
-              Always ask before signing
-            </label>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Require human approval for every write.
-            </p>
-          </div>
-          <Switch
+          <Button
+            type="submit"
             disabled={busy}
-            id="human-confirmation"
-            checked={draft.requireApproval}
-            onCheckedChange={(checked) =>
-              setDraft({ ...draft, requireApproval: checked })
-            }
-          />
-        </div>
-        <Button type="submit" disabled={busy} className="w-full">
-          <Check size={15} /> Save permission policy
-        </Button>
-      </fieldset>
-      <p className="reference-note">
-        <LockKeyhole size={13} /> Approval never bypasses blacklists, simulation
-        failures, or the gas ceiling.
-      </p>
+            className="col-span-full w-full"
+          >
+            <Check size={15} /> Save permission policy
+          </Button>
+        </fieldset>
+        <p className="reference-note">
+          <LockKeyhole size={13} /> Approval never bypasses blacklists,
+          simulation failures, or the gas ceiling.
+        </p>
+      </ConsoleCard>
     </form>
   );
 }

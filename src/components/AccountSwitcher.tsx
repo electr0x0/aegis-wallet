@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, Copy, Plus, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -190,30 +191,33 @@ export function AccountSwitcher() {
                     onChange={(e) => setName(e.target.value)}
                   />
                 </label>
-                <fieldset className="space-y-2">
-                  <legend className="mb-2 text-sm">Risk Profile Preset</legend>
-                  {(
-                    [
-                      ["CONSERVATIVE", "Conservative ($1 Auto-Limit)"],
-                      ["BALANCED", "Balanced ($2 Auto-Limit)"],
-                      ["AGGRESSIVE", "Aggressive ($10 Auto-Limit)"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <label
-                      key={value}
-                      className="flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm"
-                    >
-                      <input
-                        type="radio"
-                        name="profile"
-                        checked={profile === value}
-                        value={value}
-                        onChange={() => setProfile(value)}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </fieldset>
+                <div className="space-y-2">
+                  <p id="risk-profile-label" className="mb-2 text-sm">
+                    Risk Profile Preset
+                  </p>
+                  <RadioGroup
+                    aria-labelledby="risk-profile-label"
+                    name="profile"
+                    value={profile}
+                    onValueChange={(value) => setProfile(value as RiskProfile)}
+                  >
+                    {(
+                      [
+                        ["CONSERVATIVE", "Conservative ($1 Auto-Limit)"],
+                        ["BALANCED", "Balanced ($2 Auto-Limit)"],
+                        ["AGGRESSIVE", "Aggressive ($10 Auto-Limit)"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <label
+                        key={value}
+                        className="flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm"
+                      >
+                        <RadioGroupItem value={value} />
+                        {label}
+                      </label>
+                    ))}
+                  </RadioGroup>
+                </div>
               </>
             )}
             <PinField

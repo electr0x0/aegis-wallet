@@ -10,6 +10,7 @@ import {
   type PromptSuggestion,
 } from "@/components/godui/prompt-suggestions";
 import { PromptComposer } from "@/components/godui/prompt-composer";
+import { SpotlightCard } from "@/components/godui/spotlight-card";
 import { ApprovalCard } from "./approval-card";
 import { AgentReply, describeError, describeResult } from "./agent-reply";
 import { ExecutionSteps } from "./execution-steps";
@@ -33,7 +34,7 @@ function Exchange({ message }: { message: AgentMessage }) {
       >
         {message.intent}
       </ConversationMessage>
-      <ConversationMessage role="assistant" name="Aegis">
+      <ConversationMessage role="assistant" name="Aegis" fullWidth>
         <ExecutionSteps steps={message.steps ?? []} />
         <AgentReply reply={reply} raw={message.result} />
       </ConversationMessage>
@@ -62,38 +63,47 @@ export function AgentChat() {
       void send(scenario.prompt);
   };
   return (
-    <div className="agent-chat">
+    <div className="flex min-h-0 flex-1 flex-col">
       <ConversationThread
         variant="compact"
-        className="agent-thread"
+        className="agent-thread h-auto min-h-0 flex-1 overscroll-contain"
         aria-live="polite"
         aria-label="Conversation with your agent"
       >
         {!messages.length && !pending.length && !activeIntent && (
-          <div className="copilot-welcome">
+          <SpotlightCard
+            className="bg-muted/40 p-4 text-sm"
+            glowColor="color-mix(in oklch, var(--primary) 8%, transparent)"
+          >
             <p className="font-semibold">Your agent, within your mandate.</p>
             <p className="mt-2 text-xs text-muted-foreground">
               Describe an intent or choose a scenario below.
             </p>
-            <dl>
-              <div>
-                <dt>Tier 0 · Read</dt>
-                <dd>Inspect balances and gas freely.</dd>
+            <dl className="flex flex-col gap-2.5 py-4 text-[11px]">
+              <div className="grid grid-cols-[90px_1fr] gap-3">
+                <dt className="font-medium">Tier 0 · Read</dt>
+                <dd className="text-muted-foreground">
+                  Inspect balances and gas freely.
+                </dd>
               </div>
-              <div>
-                <dt>Tier 1 · Auto</dt>
-                <dd>Execute within your saved limits.</dd>
+              <div className="grid grid-cols-[90px_1fr] gap-3">
+                <dt className="font-medium">Tier 1 · Auto</dt>
+                <dd className="text-muted-foreground">
+                  Execute within your saved limits.
+                </dd>
               </div>
-              <div>
-                <dt>Tier 2 · HITL</dt>
-                <dd>Pause for review, hold and operator PIN.</dd>
+              <div className="grid grid-cols-[90px_1fr] gap-3">
+                <dt className="font-medium">Tier 2 · HITL</dt>
+                <dd className="text-muted-foreground">
+                  Pause for review, hold and operator PIN.
+                </dd>
               </div>
             </dl>
             <p className="text-[11px] text-muted-foreground">
               Scenario tier labels describe the intended flow. Live policy and
               simulation always decide.
             </p>
-          </div>
+          </SpotlightCard>
         )}
         {messages.map((message) => (
           <Exchange key={message.id} message={message} />
@@ -103,7 +113,7 @@ export function AgentChat() {
             <ConversationMessage role="user">
               {activeIntent}
             </ConversationMessage>
-            <ConversationMessage role="assistant" name="Aegis">
+            <ConversationMessage role="assistant" name="Aegis" fullWidth>
               <p className="text-xs text-muted-foreground">
                 {authorizing
                   ? "Waiting for operator PIN"
@@ -126,7 +136,7 @@ export function AgentChat() {
           />
         ))}
       </ConversationThread>
-      <div className="copilot-input">
+      <div className="copilot-input shrink-0 border-t bg-muted/40 p-3">
         <fieldset
           disabled={busy || sessionLocked}
           aria-label="Quick scenarios"
@@ -134,13 +144,14 @@ export function AgentChat() {
         >
           <PromptSuggestions
             variant="chips"
+            compact
             suggestions={scenarios}
             onSelect={select}
-            className="scenario-chips"
+            className="mb-2.5 gap-1.5"
           />
         </fieldset>
         {scenarios.find((s) => s.id === "vault")?.disabledReason && (
-          <p className="scenario-help">
+          <p className="mb-2 text-[10px] leading-relaxed text-muted-foreground">
             Vault: {scenarios.find((s) => s.id === "vault")?.disabledReason}
           </p>
         )}
@@ -162,11 +173,11 @@ export function AgentChat() {
               ? "Unlock an account to begin…"
               : "Describe an intent…"
           }
-          className="aegis-composer"
+          className="rounded-lg bg-background shadow-none"
         />
-        <div className="composer-caption">
+        <div className="mt-2 flex justify-between gap-1.5 text-[9px] text-muted-foreground">
           <span>Policy + simulation before signing</span>
-          <kbd>Ctrl + Enter</kbd>
+          <kbd className="whitespace-nowrap font-mono">Ctrl + Enter</kbd>
         </div>
       </div>
     </div>

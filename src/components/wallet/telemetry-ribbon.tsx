@@ -10,38 +10,52 @@ export function TelemetryRibbon() {
   const used =
     limit > 0 ? Math.min(100, (spent / limit) * 100) : spent > 0 ? 100 : 0;
   return (
-    <section className="telemetry-ribbon" aria-label="Live wallet telemetry">
-      <div>
+    <section
+      className="flex h-14 min-h-14 shrink-0 items-center justify-between gap-2.5 overflow-x-auto border-b bg-background px-4 text-[10px] text-muted-foreground [scrollbar-width:thin]"
+      aria-label="Live wallet telemetry"
+    >
+      <div className="flex shrink-0 flex-col gap-0.5">
         <span>Portfolio Value</span>
-        <strong>{live ? `${formatUsd(live.totalUsd)} USD` : "—"}</strong>
+        <strong className="whitespace-nowrap text-xs font-semibold text-foreground tabular-nums">
+          {live ? `${formatUsd(live.totalUsd)} USD` : "—"}
+        </strong>
       </div>
-      <div>
+      <div className="flex shrink-0 flex-col gap-0.5">
         <span>24h Auto Budget</span>
-        <strong>
+        <strong className="whitespace-nowrap text-xs font-semibold text-foreground tabular-nums">
           {snapshot ? `${formatUsd(spent)} / ${formatUsd(limit)}` : "—"}
         </strong>
         <Progress
           aria-label="24-hour autonomous budget used"
           value={used}
-          className="ribbon-progress"
+          className="h-[3px] max-w-28"
         />
       </div>
-      <div>
+      <div className="flex shrink-0 flex-col gap-0.5">
         <span>Base Sepolia Gas</span>
-        <strong>
+        <strong className="whitespace-nowrap text-xs font-semibold text-foreground tabular-nums">
           {live ? `${live.gasGwei.toFixed(4)} Gwei` : "—"}
-          <small>Max {snapshot?.policy.maxGasGwei ?? "—"}</small>
+          <small className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+            Max {snapshot?.policy.maxGasGwei ?? "—"}
+          </small>
         </strong>
       </div>
-      <div data-alert={pending.length > 0}>
+      <div className="flex shrink-0 flex-col gap-0.5">
         <span>Awaiting Tier 2 Approval</span>
-        <strong>{snapshot ? `${pending.length} Proposals` : "—"}</strong>
+        <strong
+          className="whitespace-nowrap text-xs font-semibold text-foreground tabular-nums data-[alert=true]:text-[var(--amber)]"
+          data-alert={pending.length > 0}
+        >
+          {snapshot ? `${pending.length} Proposals` : "—"}
+        </strong>
       </div>
-      <div className="engine-status">
+      <div className="flex shrink-0 items-center gap-2 text-primary">
         <ShieldCheck size={15} />
         <span>
           Deterministic Policy Engine
-          <strong>{snapshot ? "ACTIVE" : "CONNECTING"}</strong>
+          <strong className="block font-semibold">
+            {snapshot ? "ACTIVE" : "CONNECTING"}
+          </strong>
         </span>
       </div>
     </section>
