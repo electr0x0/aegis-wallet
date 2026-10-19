@@ -84,6 +84,7 @@ The router applies these rules in order. The first match wins.
 2. **Injection language asking for the whole balance, with no address.** Refused with an error. Nothing is signed.
 3. **Swap, yield, staking or bridging wording.** Refused before any parsing. Neither the deterministic parser nor the planner can reinterpret such a request as a transfer.
 4. **One amount and token, with no multi-step wording.** Handled by the deterministic parser:
+   - The amount must be the only number-and-unit in the prompt and written plainly (`1,5 USDC`, `.5 ETH` and `1e3 USDC` do not count), and the verb must not be negated (`don't send`). Otherwise the prompt falls through.
    - `unwrap` requires a WETH amount and produces `unwrap_weth`.
    - `wrap` or `rebalance` requires an ETH amount and produces `wrap_eth`.
    - `send`, `transfer` or `pay` produces `transfer_token` to the address in the prompt, or to `VAULT_ADDRESS` when no address is given.
@@ -92,6 +93,8 @@ The router applies these rules in order. The first match wins.
 5. **`portfolio`, `balance` or `gas`.** A Tier 0 portfolio read.
 6. **`audit` with an address.** The bytecode audit tool.
 7. **Anything else.** The LLM planner (section 6), if an API key is configured. Otherwise the request is refused with an explanation.
+
+Between rules 1 and 2, a request for keys, PINs, seed phrases, API keys, environment files or the system prompt is refused, whether written in English, in a common translation or in base64. It is never parsed or sent to the LLM provider. No tool can read a secret in any case.
 
 ### 3.2 The permission algorithm (`executeAction`)
 
