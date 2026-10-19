@@ -30,6 +30,7 @@ export const VIEW_LABELS: Record<string, string> = {
   treasury: "Treasury mandates",
   policy: "Guardrails & Policy",
   evidence: "Execution Evidence",
+  proof: "Judge proof",
 };
 const TIERS = ["TIER_0", "TIER_1_AUTO", "TIER_2_HITL", "BLOCKED", "SETUP"];
 const tierName = (tier: string) =>

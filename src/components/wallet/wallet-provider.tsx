@@ -12,6 +12,7 @@ import {
 import type { Policy } from "@/lib/security/policyEngine";
 import type { Action } from "@/lib/security/policyEngine";
 import type { PolicyComparison } from "@/lib/agent/tools";
+import type { EvidenceReport } from "@/lib/evidence/upload";
 import { describeError, describeResult, messageStatus } from "./agent-reply";
 import {
   blockedTrip,
@@ -322,6 +323,23 @@ function useWalletState() {
     decide,
     savePolicy,
     exportEvidence,
+    verifyEvidence: (
+      text: string,
+      signer: string,
+      online: boolean,
+      checkpointUid?: string,
+      guard?: string,
+    ) =>
+      request({
+        type: "evidence_verify",
+        evidence: {
+          text,
+          signer,
+          online,
+          ...(checkpointUid ? { checkpointUid } : {}),
+          ...(guard ? { guard } : {}),
+        },
+      }) as Promise<EvidenceReport>,
     comparePolicy: (
       action: Action,
       limits: Pick<

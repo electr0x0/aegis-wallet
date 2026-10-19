@@ -344,7 +344,7 @@ An operator step attests the ledger head on the Ethereum Attestation Service, us
 - **Policy.** The engine decodes the calldata that will be signed. It returns `TIER_1_AUTO` only when the call value and the attestation request value are 0, the target is the EAS predeploy (or the SchemaRegistry for registration), the schema UID is ours, simulation passed and gas is under the ceiling. Anything else is `BLOCKED`.
 - **Guard mode.** AgentGuard's target allowlist excludes EAS, so `guard.execute` would revert. An anchor is therefore sent and simulated directly from the agent EOA, with no guard pre-flight. It cannot move funds; it spends only the EOA's gas ETH.
 - **Record.** The usual `BROADCASTING` → `SUBMITTED` → `CONFIRMED` entries (intent `LEDGER_ANCHOR`, or `LEDGER_ANCHOR_SCHEMA` for registration). The rationale names the anchored head and count. Once the receipt is mined, the final entry adds `EAS attestation UID <uid>` from the `Attested` event. While an earlier anchor is still `BROADCASTING` or `SUBMITTED` (for up to 24 hours), a new one is refused.
-- **Checking.** Open the attestation on `https://base-sepolia.easscan.org`. Its `ledgerHead` must equal the `hash` of entry number `entryCount` in the exported ledger. `verifyLedger` does not read EAS; this comparison is manual.
+- **Checking.** Open the attestation on `https://base-sepolia.easscan.org`. Its `ledgerHead` must equal the `hash` of entry number `entryCount` in the exported ledger. `verifyLedger` does not read EAS automatically. Judge proof can read an explicitly selected EAS UID and compare the full ledger prefix; filtered account exports cannot prove that prefix.
 
 ## 6. LLM planner
 
@@ -386,7 +386,7 @@ The only other contract calls are the two fixed, zero-value EAS calls of the ope
 
 - **Storage.** `data/policy.json` and `data/audit_log.json` are written atomically (temp file and rename, mode 0600).
 - **Concurrency.** A promise-chain mutex stored on `globalThis` serialises every ledger and policy write, and it survives development hot reloads. This is correct for exactly one Node process. Horizontal scaling would need a transactional database and distributed nonce management.
-- **API.** `GET` and `POST /api/agent` accept only a loopback host (`localhost`, `127.0.0.1`, `[::1]`). `POST` also requires an `Origin` header exactly equal to the request's own origin. Bodies are a Zod discriminated union of three operations: `intent` (≤ 4,000 characters), `approval` (proposal UUID and a boolean) and `policy` (bounded numbers, at most 100 whitelisted addresses and 50 vendor-book entries).
+- **API.** `GET` and `POST /api/agent` accept only a loopback host (`localhost`, `127.0.0.1`, `[::1]`). `POST` also requires an `Origin` header exactly equal to the request's own origin. Bodies are a Zod discriminated union. Execution operations include `intent` (≤ 4,000 characters), `approval` (proposal UUID and a boolean) and `policy` (bounded numbers, at most 100 whitelisted addresses and 50 vendor-book entries). Account create/switch, treasury preview/execute, read-only policy comparison and evidence verification are also schema-validated and account-bound; read-only operations never enter the execution stream.
 - **Dev server.** `pnpm dev` and `pnpm start` bind to `127.0.0.1`.
 
 ## 9. Deployment
@@ -468,3 +468,15 @@ The prototype is testnet-only, single-process and single-operator. It values ass
 ### Read-only policy comparison
 
 `comparePolicy` reuses the same `inspect` function as execution. It validates a bounded hypothetical limits object, reads current policy and spend, and simulates the exact transfer from the current holder. It compares both policies with the same context. A current hard block is retained; a hypothetical Tier 1 result also needs the independent AgentGuard pre-flight. Only single/daily USD caps and `requireApproval` may vary; address lists, gas ceiling, payee rules and the pause cannot be supplied as overrides. No ledger write, pending proposal, key operation or reservation occurs. Results are snapshots, not executable quotes.
+
+### Independent evidence and checkpoint verification
+
+The independent verifier core lives in `src/lib/evidence/verify.ts`; `scripts/verify-evidence.ts` is its CLI shell and re-exports the existing API. The core deliberately does not import `store.ts`, signing clients or environment keys. Both CLI and dashboard independently recompute canonical hashes and recover EIP-191 signers. Online mode verifies chain 84532, receipt status, the master sender (or recorded guard owner for setup), and recorded transfer recipients/guard routes. It does not prove business purpose or comprehensively match every calldata argument.
+
+`evidence_verify` accepts JSON text and an explicit expected public signer, never a path or remote URL. Input is bounded to 2 MB text, 1,000 entries and 50 distinct online hashes. Imported contents are not saved; response rows omit prompts and arbitrary fields. The API retains the local-only, same-origin, active-account boundary. Empty evidence cannot pass. Offline results explicitly omit receipt verification; RPC failure never becomes success.
+
+Optional EAS checkpoint verification reads `getAttestation` at the fixed Base Sepolia EAS predeploy. It checks UID, schema, expected attester, non-revocability, revocation/expiry, then decodes the head/count/policy hash. A full ledger must match the anchored hash at exactly the attested count. A shorter ledger fails; a longer ledger reports the unanchored suffix. A filtered account array cannot establish complete prefix coverage even when the head appears in it. The policy hash is displayed as historical checkpoint metadata; it is not asserted equal to today's policy. This is an operator-selected checkpoint, not an automatic query on every refresh. ABI reference: [EAS IEAS](https://github.com/ethereum-attestation-service/eas-contracts/blob/master/contracts/IEAS.sol) and [Common.Attestation](https://github.com/ethereum-attestation-service/eas-contracts/blob/master/contracts/Common.sol).
+
+`judgeReadiness` derives status from returned public configuration and live data. It does not contact model providers or deploy/fund/renew anything. The downloaded judge report is a timestamped snapshot, not a certification or a signed security assessment.
+
+For exports without a deployment record, the verifier accepts an explicit expected public guard address (`--guard` in the CLI). This address is shown as user-supplied trust context; the contract owner is read on-chain. Normal direct EOA transactions are still checked as direct calls. A wrong guard cannot make an unrelated transaction match its recipient or guard route. This supports historical account exports without inventing a missing deployment event.

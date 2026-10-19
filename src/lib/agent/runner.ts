@@ -305,6 +305,11 @@ function plannerProviders(): Provider[] {
   );
 }
 
+// Public configuration only: never expose provider keys or infer API health from presence.
+export function plannerConfiguration() {
+  return configuredProviders().map(({ name, model }) => ({ name, model }));
+}
+
 function systemPrompt(): string {
   const vault = process.env.VAULT_ADDRESS || "not configured";
   return (

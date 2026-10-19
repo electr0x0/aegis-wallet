@@ -42,6 +42,7 @@ export type LivePortfolio = {
 };
 export type ProposalView = Proposal & { rationale?: string };
 export type Snapshot = {
+  planner?: { name: string; model: string }[];
   accounts?: PublicAccount[];
   activeAccount?: PublicAccount;
   session?: AccountState["session"];

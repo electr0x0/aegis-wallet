@@ -11,6 +11,8 @@ import {
 } from "@/lib/agent/tools";
 import { executeMandate, previewMandate } from "@/lib/treasury/mandates";
 import { mandateSchema } from "@/lib/treasury/calculate";
+import { evidenceRequestSchema, verifyUpload } from "@/lib/evidence/upload";
+import { plannerConfiguration } from "@/lib/agent/runner";
 import {
   createAgentAccount,
   listAccounts,
@@ -79,6 +81,11 @@ const policySchema = z.object({
 });
 
 const postSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("evidence_verify"),
+    accountId: z.string(),
+    evidence: evidenceRequestSchema,
+  }),
   z.object({
     type: z.literal("policy_compare"),
     accountId: z.string(),
@@ -216,6 +223,7 @@ export async function GET(req: NextRequest) {
                   : "ACTIVE",
           },
           policy: p,
+          planner: plannerConfiguration(),
           portfolio: live.value,
           guard: guard.value,
           verification,
@@ -335,6 +343,8 @@ export async function POST(req: NextRequest) {
     return await withAccount(context, async () => {
       let result: unknown;
       if (body.type === "intent") result = await runIntent(body.prompt);
+      else if (body.type === "evidence_verify")
+        result = await verifyUpload(body.evidence);
       else if (body.type === "policy_compare")
         result = await comparePolicy(body.comparison);
       else if (body.type === "treasury_preview")

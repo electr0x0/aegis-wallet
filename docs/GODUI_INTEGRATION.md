@@ -92,3 +92,7 @@ Account provisioning and PIN confirmation use the official GodUI Dialog, Dropdow
 For a production check alongside a running development server, set `AEGIS_BUILD_DIR=.next-verify` before `pnpm build` to isolate Next.js output. The default output directory remains `.next`.
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. The Vitest suite includes policy, execution concurrency, local API access, approval review/cancellation/confirmation, text-only composer behavior, funded-asset scenario selection and streamed progress parsing. Browser checks covered all four center views, retained conversation/draft across navigation, evidence tier filters, the 640px expansion, and Clear Thread. At 1280×800 and 390×844 the root document matched the viewport; mobile Intent Studio kept its composer pinned to the Sheet bottom. Live portfolio reads can be exercised without funding; live approval/broadcast requires funded Base Sepolia assets.
+
+## Hackathon enhancement compositions
+
+Treasury mandates use GodUI Input, Radio Group, Button, Lab Bento Cards and Agent Timeline for server-owned previews and constraint explanations. The policy what-if lab uses the same controls plus Switch and paired Bento Cards. Judge proof uses Lab Bento Cards, Agent Timeline and Filter Bar with GodUI file Input, Switch and Button. The native verification table follows the evidence-table exception documented above. These compositions add no bespoke CSS file or styling dependency. The sidebar now has six views; Intent Studio remains permanently docked across them.

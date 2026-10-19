@@ -8,8 +8,10 @@ import { PolicyControls } from "@/components/wallet/policy-controls";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { TreasuryView } from "@/components/wallet/treasury-view";
 import { PolicyLab } from "@/components/wallet/policy-lab";
+import { ProofView } from "@/components/wallet/proof-view";
 export default function Home() {
   const { tab, snapshot, busy, sessionLocked, savePolicy } = useWallet();
+  if (tab === "proof") return <ProofView key={snapshot?.activeAccount?.id} />;
   if (tab === "treasury")
     return <TreasuryView key={snapshot?.activeAccount?.id} />;
   if (tab === "policy")

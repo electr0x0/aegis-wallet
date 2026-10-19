@@ -82,7 +82,7 @@ pnpm setup-wallets
 
    Open http://127.0.0.1:3000. Restart the dev server after any change to `.env.local`.
 
-   The locked-viewport console has four sidebar views: Command Center, Portfolio & Runway, Guardrails & Policy, and Execution Evidence. Intent Studio stays docked beside every view with its own scrolling thread and pinned composer; below 1024px it opens in a Sheet. `/agent` redirects to this console. Replies include actual policy, simulation and broadcast events, returned BaseScan receipts, and technical details. Clear Thread clears the local conversation without deleting audit history or pending approvals.
+   The locked-viewport console has six sidebar views: Command Center, Portfolio & Runway, Treasury mandates, Guardrails & Policy (including the read-only what-if lab), Execution Evidence, and Judge proof. Intent Studio stays docked beside every view with its own scrolling thread and pinned composer; below 1024px it opens in a Sheet. `/agent` redirects to this console. Replies include actual policy, simulation and broadcast events, returned BaseScan receipts, and technical details. Clear Thread clears the local conversation without deleting audit history or pending approvals.
 
    The compact vault scenario uses 1 USDC when available, otherwise 0.0001 WETH or ETH (or a remaining partial USDC balance). It requires a configured, whitelisted, non-blacklisted vault. Live policy and simulation still decide the outcome: a funded balance does not bypass a runway floor or approval requirement. The runway calculator previews inputs without saving policy; whitelist and blacklist changes require the operator PIN. Execution Evidence supports tier/search filters and exports the account's full audit history.
 
@@ -189,3 +189,13 @@ Previews are read-only, expire after five minutes and carry a server-owned, acco
 ### Policy what-if lab
 
 Under Guardrails & Policy, compare the current decision with hypothetical single/daily caps and an always-ask setting against a real EVM pre-flight. The lab never saves settings, writes evidence, creates a proposal or signs. Existing hard blocks and AgentGuard limits remain enforced. Each result identifies the stored policy hash and snapshot time; execution must run its own checks again.
+
+### Judge proof workspace
+
+Open **Judge proof** for live readiness checks and a read-only verifier. It shows configured model names (never keys), EOA versus guard custody, guard expiry, gas reserve, vault policy, always-ask/pause state, recorded tier coverage and unresolved broadcasts. Configuration presence does not establish provider health.
+
+Select the current account export or import a JSON ledger/export, confirm the expected public ledger signer from a separate trusted source, and verify seals with optional Base Sepolia receipt reads. Optionally enter an EAS attestation UID to compare an anchored prefix. Full ledger objects can prove prefix links/count; account arrays cannot. Newer entries remain explicitly unanchored. Download the verification or judge report for reviewers. Files are limited to 2 MB, 1,000 entries and 50 distinct online transactions; use `pnpm verify:evidence` for larger files. Imports are not saved. No wallet extension, signature, funding or policy change is needed for these checks.
+
+The documented EAS checkpoint and the local private ledger may belong to different operator runs. A mismatch is reported honestly; obtain the matching full ledger before citing anchored coverage. A fresh checkout has no private evidence and is never filled with synthetic history. See [the judge walkthrough](docs/JUDGE_WALKTHROUGH.md) for the revised demo order.
+
+Older exports may omit the guard deployment entry. Enter the expected public AgentGuard address in Judge proof, or pass `--guard 0x...` to `pnpm verify:evidence`, so the verifier can decode its routed payment and check the recipient. The guard owner is read from that contract on chain 84532. An absent or wrong guard address never silently turns an unverified route into a pass.

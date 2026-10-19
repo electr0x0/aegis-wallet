@@ -172,12 +172,13 @@ export function PolicyLab() {
                   : "Pre-flight or hard policy check failed"
               }
               status={result.simulation === "PASSED" ? "success" : "error"}
-              meta={
-                result.simulation === "PASSED"
-                  ? `Estimated ${result.gasEstimate} gas units. No transaction sent.`
-                  : result.simulation
-              }
-            />
+              defaultOpen
+              last
+            >
+              {result.simulation === "PASSED"
+                ? `Estimated ${result.gasEstimate} gas units. No transaction sent.`
+                : result.simulation}
+            </AgentStep>
           </AgentTimeline>
           <p className="text-[10px] text-muted-foreground [overflow-wrap:anywhere]">
             Policy {result.policyHash} ·{" "}

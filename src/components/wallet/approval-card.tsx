@@ -145,6 +145,18 @@ function ProposalFacts({ proposal, whitelist, guarded }: FactsProps) {
           </dd>
         </div>
       )}
+      {proposal.mandate && (
+        <div>
+          <dt>Treasury mandate review window</dt>
+          <dd>
+            Expires {new Date(proposal.mandate.expiresAt).toLocaleString()}.
+            Preserve {proposal.mandate.settings.gasReserveEth} ETH agent gas;
+            maximum {proposal.mandate.settings.maxSweepUsd} USD reference sweep.
+            Expiry, changed policy or insufficient reserves block approval;
+            create a fresh preview instead.
+          </dd>
+        </div>
+      )}
       {proposal.rationale && (
         <div>
           <dt>Deterministic rationale</dt>

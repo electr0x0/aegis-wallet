@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Target } from "lucide-react";
+import { Target, FileCheck2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Sidebar,
@@ -35,6 +35,7 @@ const DASHBOARD_VIEWS = [
   { id: "treasury", label: "Treasury mandates", Icon: Target },
   { id: "policy", label: "Guardrails & Policy", Icon: SlidersHorizontal },
   { id: "evidence", label: "Execution Evidence", Icon: ScrollText },
+  { id: "proof", label: "Judge proof", Icon: FileCheck2 },
 ];
 
 // The right half of the shield in src/app/icon.svg, drawn over the white whole.
