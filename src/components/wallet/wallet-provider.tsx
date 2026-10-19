@@ -25,6 +25,8 @@ import {
 } from "./types";
 import { PinDialog } from "./pin-dialog";
 import type { RiskProfile } from "@/lib/auth/accountStore";
+import type { ExecutionProgress } from "@/lib/agent/progress";
+import { readExecutionStream } from "./read-execution";
 
 type Wallet = ReturnType<typeof useWalletState>;
 
@@ -45,7 +47,10 @@ function useWalletState() {
     finish: (pin: string | null) => void;
   } | null>(null);
   const refreshSequence = useRef(0);
-  const [tab, setTab] = useState("portfolio");
+  const [tab, setTab] = useState("command");
+  const [progress, setProgress] = useState<ExecutionProgress[]>([]);
+  const progressRef = useRef<ExecutionProgress[]>([]);
+  const [activeIntent, setActiveIntent] = useState("");
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [notice, setNotice] = useState("");
@@ -82,19 +87,43 @@ function useWalletState() {
     try {
       const response = await fetch("/api/agent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: ["intent", "approval"].includes(
+            (body as { type: string }).type,
+          )
+            ? "application/x-ndjson"
+            : "application/json",
+        },
         body: JSON.stringify({
           accountId: accountState.activeAccount?.id,
           ...(body as object),
         }),
       });
+      if (
+        response.ok &&
+        response.headers?.get("content-type")?.includes("application/x-ndjson")
+      ) {
+        return await readExecutionStream(response, (event) => {
+          const previous = event.start ? [] : progressRef.current;
+          const stages = ["policy", "simulation", "broadcast"];
+          progressRef.current = [
+            ...previous.filter((s) => s.stage !== event.stage),
+            event,
+          ].sort((a, b) => stages.indexOf(a.stage) - stages.indexOf(b.stage));
+          setProgress([...progressRef.current]);
+        });
+      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
       return data.result;
     } finally {
-      inFlight.current = false;
-      setBusy(false);
-      await refresh();
+      try {
+        await refresh();
+      } finally {
+        inFlight.current = false;
+        setBusy(false);
+      }
     }
   }
 
@@ -102,20 +131,29 @@ function useWalletState() {
   async function converse(intent: string, body: unknown) {
     if (inFlight.current) return;
     const message = { id: crypto.randomUUID(), intent, time: Date.now() };
+    setActiveIntent(intent);
+    progressRef.current = [];
+    setProgress([]);
     setTrip(null);
     try {
       const result = await request(body);
       setTrip(blockedTrip(result));
       const status = messageStatus(describeResult(result));
-      setMessages((current) => [...current, { ...message, result, status }]);
+      setMessages((current) => [
+        ...current,
+        { ...message, result, status, steps: [...progressRef.current] },
+      ]);
     } catch (error) {
       const text = (error as Error).message;
       setTrip(refusalTrip(text));
       const status = messageStatus(describeError(text));
       setMessages((current) => [
         ...current,
-        { ...message, error: text, status },
+        { ...message, error: text, status, steps: [...progressRef.current] },
       ]);
+    } finally {
+      setActiveIntent("");
+      setProgress([]);
     }
   }
 
@@ -152,6 +190,9 @@ function useWalletState() {
           whitelistedAddresses: policy.whitelistedAddresses
             .map((value) => value.trim())
             .filter(Boolean),
+          blacklistedAddresses: policy.blacklistedAddresses
+            .map((value) => value.trim())
+            .filter(Boolean),
         },
       });
       setNotice("Permission policy saved.");
@@ -176,8 +217,9 @@ function useWalletState() {
   ) {
     await request(body);
     setMessages([]);
+    setProgress([]);
     setTrip(null);
-    setTab("portfolio");
+    setTab("command");
   }
 
   function exportEvidence() {
@@ -247,6 +289,15 @@ function useWalletState() {
     authorizing: Boolean(stepUp),
     sessionLocked: accountState.session.status === "LOCKED",
     messages,
+    progress,
+    activeIntent,
+    clearThread: () => {
+      if (!inFlight.current) {
+        setMessages([]);
+        setProgress([]);
+        setTrip(null);
+      }
+    },
     notice,
     setNotice,
     trip,

@@ -9,7 +9,7 @@ AegisWallet is an AI agent wallet on Base Sepolia. It treats the model as a fina
 
 Entry for the 2026 Shenzhen International FinTech Competition, International Track, Topic F "Agent Wallet".
 
-![AegisWallet operator dashboard](docs/screenshots/godui-dashboard.png)
+![AegisWallet operator console](docs/screenshots/console-workspace.png)
 
 ## How it works
 
@@ -64,7 +64,9 @@ pnpm setup-wallets
 
    Open http://127.0.0.1:3000. Restart the dev server after any change to `.env.local`.
 
-   The full-height agent chat is at http://127.0.0.1:3000/agent (sidebar → Agent chat). The dashboard's Intent studio shows the same conversation. Each reply states the outcome in plain words (done, waiting for approval, or blocked and why), and the raw API result sits behind "Technical details".
+   The locked-viewport console has four sidebar views: Command Center, Portfolio & Runway, Guardrails & Policy, and Execution Evidence. Intent Studio stays docked beside every view with its own scrolling thread and pinned composer; below 1024px it opens in a Sheet. `/agent` redirects to this console. Replies include actual policy, simulation and broadcast events, returned BaseScan receipts, and technical details. Clear Thread clears the local conversation without deleting audit history or pending approvals.
+
+   The compact vault scenario uses 1 USDC when available, otherwise 0.0001 WETH or ETH (or a remaining partial USDC balance). It requires a configured, whitelisted, non-blacklisted vault. Live policy and simulation still decide the outcome: a funded balance does not bypass a runway floor or approval requirement. The runway calculator previews inputs without saving policy; whitelist and blacklist changes require the operator PIN. Execution Evidence supports tier/search filters and exports the account's full audit history.
 
 No fake balances or transaction hashes are ever generated. An unfunded checkout shows no on-chain evidence.
 

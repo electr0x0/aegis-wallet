@@ -20,15 +20,16 @@ import {
   Wallet,
   SlidersHorizontal,
   FileText,
-  MessageSquare,
+  ScanLine,
   ShieldCheck,
 } from "./icons";
 import { useWallet } from "./wallet-provider";
 
 const DASHBOARD_VIEWS = [
-  { id: "portfolio", label: "Portfolio", Icon: Wallet },
-  { id: "policy", label: "Guardrails", Icon: SlidersHorizontal },
-  { id: "evidence", label: "Evidence", Icon: FileText },
+  { id: "command", label: "Command Center", Icon: ScanLine },
+  { id: "portfolio", label: "Portfolio & Runway", Icon: Wallet },
+  { id: "policy", label: "Guardrails & Policy", Icon: SlidersHorizontal },
+  { id: "evidence", label: "Execution Evidence", Icon: FileText },
 ];
 
 export function AppSidebar() {
@@ -42,9 +43,7 @@ export function AppSidebar() {
   const openView = (id: string) => {
     setTab(id);
     close();
-    if (pathname !== "/") router.push("/#telemetry");
-    else
-      document.getElementById("telemetry")?.scrollIntoView({ block: "start" });
+    if (pathname !== "/") router.push("/");
   };
   return (
     <Sidebar collapsible="icon" aria-label="Workspace navigation">
@@ -74,18 +73,6 @@ export function AppSidebar() {
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/agent"}
-                  tooltip="Agent chat"
-                >
-                  <Link href="/agent" onClick={close}>
-                    <MessageSquare size={20} />
-                    <span>Agent chat</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
               {DASHBOARD_VIEWS.map(({ id, label, Icon }) => (
                 <SidebarMenuItem key={id}>
                   <SidebarMenuButton

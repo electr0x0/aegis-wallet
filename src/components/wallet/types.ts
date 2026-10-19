@@ -1,6 +1,7 @@
 import type { Policy } from "@/lib/security/policyEngine";
 import type { Entry, LedgerVerification, Proposal } from "@/lib/store";
 import type { PublicAccount } from "@/lib/auth/accountStore";
+import type { ExecutionProgress } from "@/lib/agent/progress";
 
 export type AccountState = {
   accounts: PublicAccount[];
@@ -52,6 +53,7 @@ export type Snapshot = {
   verification?: LedgerVerification;
 };
 export type AgentMessage = {
+  steps?: ExecutionProgress[];
   id: string;
   intent: string;
   time: number;

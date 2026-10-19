@@ -245,6 +245,71 @@ describe("Encrypted accounts and sessions", () => {
 });
 
 describe("PIN step-up and policy enforcement", () => {
+  it("preserves existing mixed-case mock blacklist addresses when saving settings", async () => {
+    const entry = "0xBadC0de000000000000000000000000000000000";
+    const response = await post({
+      type: "policy",
+      accountId: "master",
+      pin: "884210",
+      policy: { ...(await policy()), blacklistedAddresses: [entry] },
+    });
+    expect(response.status).toBe(200);
+    expect((await policy()).blacklistedAddresses).toEqual([entry]);
+  });
+  it("requires the PIN for blacklist editing and applies the saved hard block", async () => {
+    const p = { ...(await policy()), blacklistedAddresses: [destination] };
+    expect(
+      (await post({ type: "policy", accountId: "master", policy: p })).status,
+    ).toBe(400);
+    expect(
+      (
+        await post({
+          type: "policy",
+          accountId: "master",
+          policy: p,
+          pin: "884210",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await policy()).blacklistedAddresses).toEqual([destination]);
+    const result = await executeAction(action);
+    expect(result.decision.tier).toBe("BLOCKED");
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("streams execution progress through the same account and PIN boundary", async () => {
+    const response = await POST(
+      new NextRequest("http://localhost:3000/api/agent", {
+        method: "POST",
+        headers: {
+          host: "localhost:3000",
+          origin: "http://localhost:3000",
+          Accept: "application/x-ndjson",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "intent",
+          accountId: "master",
+          prompt: "Analyze my on-chain portfolio and gas conditions",
+        }),
+      }),
+    );
+    expect(response.headers.get("content-type")).toContain(
+      "application/x-ndjson",
+    );
+    const events = (await response.text())
+      .trim()
+      .split("\n")
+      .map((x) => JSON.parse(x));
+    expect(events[0]).toMatchObject({
+      type: "progress",
+      event: { stage: "policy", status: "success" },
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "result",
+      result: { balances: { ETH: "0.01" } },
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
   it("saves only the selected account policy with its own PIN", async () => {
     const created = await createAgentAccount(
       "Policy org",

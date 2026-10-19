@@ -12,6 +12,9 @@ export type PromptSuggestion = {
   /** Optional secondary line (only shown in grid/list). */
   hint?: string;
   icon?: React.ReactNode;
+  /** Local integration: unavailable live-balance scenarios cannot submit. */
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 export type PromptSuggestionsProps = Omit<
@@ -96,6 +99,8 @@ const PromptSuggestions = React.forwardRef<
                 itemsRef.current[index] = el;
               }}
               type="button"
+              disabled={suggestion.disabled}
+              title={suggestion.disabledReason || suggestion.label}
               initial={reduce ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
