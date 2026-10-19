@@ -16,6 +16,8 @@ export type PromptSuggestion = {
   /** Local integration: unavailable live-balance scenarios cannot submit. */
   disabled?: boolean;
   disabledReason?: string;
+  /** Local integration: trailing tag, such as the scenario's policy tier. */
+  badge?: React.ReactNode;
 };
 
 export type PromptSuggestionsProps = Omit<
@@ -72,7 +74,7 @@ const PromptSuggestions = React.forwardRef<
           ref={ref}
           data-slot="prompt-suggestions"
           data-loading=""
-          className={`${CONTAINER_BY_VARIANT[variant]} ${className ?? ""}`}
+          className={cn(CONTAINER_BY_VARIANT[variant], className)}
           {...props}
         >
           {Array.from({ length: skeletonCount }).map((_, i) => (
@@ -91,7 +93,7 @@ const PromptSuggestions = React.forwardRef<
         ref={ref}
         data-slot="prompt-suggestions"
         data-variant={variant}
-        className={`${CONTAINER_BY_VARIANT[variant]} ${className ?? ""}`}
+        className={cn(CONTAINER_BY_VARIANT[variant], className)}
         {...props}
       >
         {suggestions.map((suggestion, index) => {
@@ -131,17 +133,20 @@ const PromptSuggestions = React.forwardRef<
                 compact &&
                   isChip &&
                   "max-w-full rounded-md px-2.5 py-1.5 shadow-none",
+                compact &&
+                  !isChip &&
+                  "items-center gap-2 rounded-md px-2.5 py-1.5 shadow-none hover:translate-y-0 hover:bg-accent hover:shadow-none",
                 "disabled:pointer-events-none disabled:opacity-50",
               )}
             >
               {suggestion.icon ? (
                 <span
-                  className={`shrink-0 text-muted-foreground transition-colors group-hover:text-primary ${isChip ? "" : "mt-0.5"}`}
+                  className={`shrink-0 text-muted-foreground transition-colors group-hover:text-primary ${isChip || compact ? "" : "mt-0.5"}`}
                 >
                   {suggestion.icon}
                 </span>
               ) : null}
-              <span className="min-w-0">
+              <span className={cn("min-w-0", !isChip && "flex-1")}>
                 <span
                   className={cn(
                     "block truncate text-sm font-medium text-foreground",
@@ -156,6 +161,9 @@ const PromptSuggestions = React.forwardRef<
                   </span>
                 ) : null}
               </span>
+              {suggestion.badge ? (
+                <span className="shrink-0">{suggestion.badge}</span>
+              ) : null}
               {!isChip ? (
                 <ArrowIcon className="ml-auto size-4 shrink-0 -translate-x-1 text-muted-foreground opacity-0 transition-[transform,opacity] group-hover:translate-x-0 group-hover:opacity-100" />
               ) : null}

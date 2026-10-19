@@ -2,6 +2,21 @@
 
 import { useState } from "react";
 import {
+  ArrowRightLeft,
+  ChevronDown,
+  Landmark,
+  ScanSearch,
+  Send,
+  ShieldAlert,
+  type LucideIcon,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   ConversationMessage,
   ConversationThread,
 } from "@/components/godui/conversation-thread";
@@ -11,12 +26,22 @@ import {
 } from "@/components/godui/prompt-suggestions";
 import { PromptComposer } from "@/components/godui/prompt-composer";
 import { SpotlightCard } from "@/components/godui/spotlight-card";
+import { cn } from "@/lib/utils";
 import { ApprovalCard } from "./approval-card";
 import { AgentReply, describeError, describeResult } from "./agent-reply";
+import { TierBadge } from "./console-views";
 import { ExecutionSteps } from "./execution-steps";
 import { buildScenarios } from "./scenarios";
 import { useWallet } from "./wallet-provider";
 import type { AgentMessage } from "./types";
+
+const SCENARIO_ICONS: Record<string, LucideIcon> = {
+  portfolio: ScanSearch,
+  wrap: ArrowRightLeft,
+  vault: Landmark,
+  external: Send,
+  security: ShieldAlert,
+};
 
 function Exchange({ message }: { message: AgentMessage }) {
   const reply =
@@ -56,7 +81,17 @@ export function AgentChat() {
     activeIntent,
   } = useWallet();
   const [prompt, setPrompt] = useState("");
+  const [showScenarios, setShowScenarios] = useState(true);
   const scenarios = buildScenarios(snapshot?.portfolio, snapshot?.policy);
+  const suggestions = scenarios.map((scenario) => {
+    const Icon = SCENARIO_ICONS[scenario.id];
+    return {
+      ...scenario,
+      icon: <Icon size={13} aria-hidden />,
+      badge: <TierBadge tier={scenario.tier} />,
+    };
+  });
+  const vaultReason = scenarios.find((s) => s.id === "vault")?.disabledReason;
   const select = (suggestion: PromptSuggestion) => {
     const scenario = scenarios.find((s) => s.id === suggestion.id);
     if (scenario && !scenario.disabled && !busy && !sessionLocked)
@@ -137,24 +172,53 @@ export function AgentChat() {
         ))}
       </ConversationThread>
       <div className="copilot-input shrink-0 border-t bg-muted/40 p-3">
-        <fieldset
-          disabled={busy || sessionLocked}
-          aria-label="Quick scenarios"
-          className="min-w-0"
+        <Collapsible
+          open={showScenarios}
+          onOpenChange={setShowScenarios}
+          className="mb-2.5"
         >
-          <PromptSuggestions
-            variant="chips"
-            compact
-            suggestions={scenarios}
-            onSelect={select}
-            className="mb-2.5 gap-1.5"
-          />
-        </fieldset>
-        {scenarios.find((s) => s.id === "vault")?.disabledReason && (
-          <p className="mb-2 text-[10px] leading-relaxed text-muted-foreground">
-            Vault: {scenarios.find((s) => s.id === "vault")?.disabledReason}
-          </p>
-        )}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Demo scenarios
+            </span>
+            <CollapsibleTrigger asChild>
+              <Button
+                size="xs"
+                variant="ghost"
+                className="h-5 text-[10px] text-muted-foreground"
+              >
+                {showScenarios ? "Hide" : `Show ${scenarios.length}`}
+                <ChevronDown
+                  aria-hidden
+                  className={cn(
+                    "transition-transform",
+                    !showScenarios && "rotate-180",
+                  )}
+                />
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent>
+            <fieldset
+              disabled={busy || sessionLocked}
+              aria-label="Quick scenarios"
+              className="min-w-0 pt-2"
+            >
+              <PromptSuggestions
+                variant="list"
+                compact
+                suggestions={suggestions}
+                onSelect={select}
+                className="gap-1"
+              />
+            </fieldset>
+            {vaultReason && (
+              <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                Vault: {vaultReason}
+              </p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
         <PromptComposer
           value={prompt}
           onValueChange={setPrompt}
