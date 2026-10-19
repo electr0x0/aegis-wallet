@@ -306,9 +306,28 @@ it("distinguishes an unavailable checkpoint from a successful seal check", async
     online: true,
     checkpointUid: uid,
   });
-  expect(report.ok).toBe(true);
+  expect(report.ok).toBe(false);
+  expect(report.sealsAndReceiptsOk).toBe(true);
   expect(report.checkpoint).toBeNull();
   expect(report.checkpointError).toContain("unverified");
+});
+it("requires every selected check to pass, including full checkpoint coverage", async () => {
+  const f = await fixture();
+  mocks.read.mockResolvedValue(f.record);
+  const input = {
+    text: JSON.stringify({ logs: f.evidence.entries }),
+    signer: f.account.address,
+    online: true,
+    checkpointUid: uid,
+  };
+  expect((await verifyUpload(input)).ok).toBe(true);
+  const partial = await verifyUpload({
+    ...input,
+    text: JSON.stringify(f.evidence.entries),
+  });
+  expect(partial.sealsAndReceiptsOk).toBe(true);
+  expect(partial.checkpoint?.ok).toBe(false);
+  expect(partial.ok).toBe(false);
 });
 it("reports missing readiness honestly and deduplicates resolved broadcasts", () => {
   expect(judgeReadiness(null)[0].status).toBe("unavailable");

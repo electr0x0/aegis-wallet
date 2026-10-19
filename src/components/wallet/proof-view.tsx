@@ -255,7 +255,11 @@ export function ProofView() {
                     ? "Full ledger format selected"
                     : "Filtered export: completeness is unproven"
                 }
-                status={report.complete && report.ok ? "success" : "pending"}
+                status={
+                  report.complete && report.sealsAndReceiptsOk
+                    ? "success"
+                    : "pending"
+                }
                 defaultOpen
               >
                 {report.complete
