@@ -30,6 +30,8 @@ No step needs a private key or a funded wallet.
 | 2. Pre-flight simulation                              | `eth_call` and `estimateGas` from the address that holds the funds, on chain 84532 only                                                                                                                                                                                                                       |
 | 3. AgentGuard (`contracts/AgentGuard.sol`)            | Session expiry, per-asset per-transaction and per-UTC-day caps, target, recipient and selector allowlists (the session key cannot `approve`), and Tier 2 approvals as owner EIP-191 signatures verified on-chain with a nonce and deadline                                                                    |
 
+The ledger head (last entry hash, entry count, policy hash) can be anchored on EAS by the operator. This is a fixed, zero-value call sent from the agent EOA through `executeAction`; it is never a planner tool.
+
 AgentGuard is not an ERC-4337 account. There is no EntryPoint, bundler or paymaster; the session key pays its own gas. Details are in [docs/01](docs/01_TECHNICAL_DOCUMENTATION.md). Risks and limitations are in [docs/05](docs/05_SECURITY_SELF_ASSESSMENT.md).
 
 ## Quickstart
@@ -120,6 +122,8 @@ pnpm guard:attack --broadcast     # also send attack (a), producing a reverted t
 
 pnpm guard:verify                 # publish the AgentGuard source to Sourcify and Blockscout (--address 0x...)
 pnpm verify:evidence [path]       # independent read-only ledger check: hashes, signatures, receipts (--offline, --signer)
+pnpm ledger:anchor                # attest the ledger head on EAS (registers the schema once if missing)
+pnpm ledger:anchor --dry-run      #   policy and simulation only; nothing is signed
 ```
 
 The demo prompts and the recording script are in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).

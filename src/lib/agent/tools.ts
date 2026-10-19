@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { BaseError, formatUnits, isAddress, parseUnits } from "viem";
+import { BaseError, formatUnits, isAddress, parseUnits, zeroHash } from "viem";
 import { z } from "zod";
 import {
   USDC,
   WETH,
   account,
+  anchorCall,
+  attestationUid,
   decodeGuardError,
   guardAddress,
   holderAddress,
@@ -33,10 +35,16 @@ import {
 } from "../auth/accountStore";
 import type { PublicAccount } from "../auth/accountStore";
 import {
+  ANCHOR_KINDS,
+  EAS_ADDRESS,
+  SCHEMA_REGISTRY_ADDRESS,
   evaluateTransactionPolicy,
   explainDecision,
+  isAnchor,
   type Action,
+  type AnchorKind,
   type Decision,
+  type LedgerAnchor,
   type Policy,
 } from "../security/policyEngine";
 import {
@@ -46,6 +54,7 @@ import {
   policy,
   policyHash,
   saveLedger,
+  verifyLedger,
   type Entry,
   type Ledger,
   type Proposal,
@@ -66,6 +75,14 @@ export const actionSchema = z.object({
   recipient: z.string().refine(isAddress),
   prompt: z.string().max(4000),
 });
+
+// Operator-only (pnpm ledger:anchor). Planner and approval inputs parse with
+// actionSchema, which never accepts these kinds.
+const anchorSchema = actionSchema.extend({ kind: z.enum(ANCHOR_KINDS) });
+const ANCHOR_PROMPTS: Record<AnchorKind, string> = {
+  register_anchor_schema: "LEDGER_ANCHOR_SCHEMA",
+  anchor_ledger: "LEDGER_ANCHOR",
+};
 
 type Inspection = {
   decision: Decision;
@@ -109,12 +126,45 @@ function autonomousSpendUsd(l: Ledger): number {
   return total;
 }
 
+// An anchor whose outcome is unknown stays reserved: no second anchor while it is open
+// (24 hours, the same window Tier 1 reservations hold budget for).
+function unresolvedAnchor(l: Ledger): boolean {
+  const latest = new Map<string, Entry>();
+  for (const entry of l.logs) latest.set(entry.operationId ?? entry.id, entry);
+  const prompts = Object.values(ANCHOR_PROMPTS);
+  return [...latest.values()].some(
+    (entry) =>
+      prompts.includes(entry.intent) &&
+      ["BROADCASTING", "SUBMITTED"].includes(entry.status) &&
+      Date.now() - Date.parse(entry.timestamp) < DAY_MS,
+  );
+}
+
+// The anchored data comes only from the sealed ledger and the current policy.
+async function ledgerHead(l: Ledger, p: Policy): Promise<LedgerAnchor> {
+  if (!(await verifyLedger(l)).valid) {
+    throw new Error("Ledger fails verification; refusing to anchor it.");
+  }
+  if (unresolvedAnchor(l)) {
+    throw new Error(
+      "A previous ledger anchor is unresolved. Check it on BaseScan; do not retry.",
+    );
+  }
+  return {
+    ledgerHead: l.logs.at(-1)?.hash ?? zeroHash,
+    entryCount: l.logs.length,
+    policyHash: policyHash(p),
+  };
+}
+
 // Simulates the inner call from the address that holds the funds (guard or EOA).
+// Ledger anchors are sent by the agent EOA itself, so they simulate from it.
 async function simulate(a: Action) {
   if ((await publicClient.getChainId()) !== BASE_SEPOLIA_CHAIN_ID) {
     throw new Error("RPC chain mismatch");
   }
-  const inner = { ...transaction(a), account: holderAddress() };
+  const from = isAnchor(a) ? account().address : holderAddress();
+  const inner = { ...transaction(a), account: from };
   const [gas, price, call] = await Promise.all([
     publicClient.estimateGas(inner),
     publicClient.getGasPrice(),
@@ -214,12 +264,15 @@ async function inspect(
     return finish(decision, "0", "Blocked before RPC");
   }
 
+  // The policy checks an anchor against the calldata that will actually be signed.
+  const anchor = isAnchor(a) ? anchorCall(transaction(a)) : undefined;
   const early = evaluateTransactionPolicy(a, p, {
     usd,
     spentUsd,
     gasGwei: 0,
     simulation: true,
     onboardingRecipient,
+    anchorCall: anchor,
   });
   if (early.tier === "BLOCKED") return finish(early, "0", "Blocked before RPC");
 
@@ -241,8 +294,10 @@ async function inspect(
     simulation: !error,
     holdingsUsd: holdings,
     onboardingRecipient,
+    anchorCall: anchor,
   });
-  if (decision.tier === "TIER_1_AUTO" && !approved) {
+  // Anchors never pass through AgentGuard (see broadcast), so there is no guard pre-flight.
+  if (decision.tier === "TIER_1_AUTO" && !approved && !isAnchor(a)) {
     const rejection = await guardRejection(a);
     if (rejection) decision = blocked(rejection);
   }
@@ -319,9 +374,12 @@ async function broadcast(
   await saveLedger(l);
 
   try {
-    const hash = await wallet().sendTransaction(
-      outerCall(transaction(a), approval),
-    );
+    // AgentGuard's target allowlist excludes EAS, so guard.execute would revert. A ledger
+    // anchor goes straight from the agent EOA; the policy has proven it carries zero value.
+    const call = isAnchor(a)
+      ? transaction(a)
+      : outerCall(transaction(a), approval);
+    const hash = await wallet().sendTransaction(call);
     entry.txHash = hash;
     entry.status = "SUBMITTED";
     if (proposal) proposal.status = "SUBMITTED";
@@ -334,7 +392,11 @@ async function broadcast(
     });
     entry.status = receipt.status === "success" ? "CONFIRMED" : "REVERTED";
     if (proposal) proposal.status = entry.status;
-    return record(l, entry, { ...check, txHash: hash, status: entry.status });
+    const uid =
+      a.kind === "anchor_ledger" ? attestationUid(receipt.logs) : undefined;
+    if (uid) entry.reasons = [...entry.reasons, `EAS attestation UID ${uid}`];
+    const result = { ...check, txHash: hash, status: entry.status };
+    return record(l, entry, uid ? { ...result, attestationUid: uid } : result);
   } catch (e) {
     entry.reasons = [...entry.reasons, briefError(e)];
     log(l, entry);
@@ -352,9 +414,14 @@ export async function executeAction(
   dryRun = false,
   approvalId?: string,
   pin?: string,
+  operatorAnchor = false,
 ) {
   return exclusive(async () => {
-    let a = normalize(actionSchema.parse(input));
+    const schema = operatorAnchor ? anchorSchema : actionSchema;
+    let a = normalize(schema.parse(input));
+    if (operatorAnchor && approvalId) {
+      throw new Error("Ledger anchors are never proposals");
+    }
     let onboardingRecipient: string | undefined;
     if (a.kind === "fund_account") {
       if (
@@ -398,6 +465,11 @@ export async function executeAction(
     const currentProposal = proposal
       ? fresh.pending.find((x) => x.id === proposal.id)!
       : undefined;
+    if (isAnchor(a)) {
+      // Any anchor field in the input was stripped by Zod; this one comes from the ledger.
+      const head = await ledgerHead(fresh, p);
+      if (a.kind === "anchor_ledger") a = { ...a, anchor: head };
+    }
     const check = await inspect(
       a,
       fresh,
@@ -529,6 +601,21 @@ export async function audit_contract_address(address: string) {
     implementation,
     warning: "Static bytecode heuristics are not a contract security audit.",
   };
+}
+
+/**
+ * Operator-only (pnpm ledger:anchor), never a planner tool: a fixed zero-value EAS call
+ * through the same policy, simulation and reservation path as every other write.
+ */
+export function anchorLedger(kind: AnchorKind, dryRun = false) {
+  const action: Action = {
+    kind,
+    token: "ETH",
+    amount: "0",
+    recipient: kind === "anchor_ledger" ? EAS_ADDRESS : SCHEMA_REGISTRY_ADDRESS,
+    prompt: ANCHOR_PROMPTS[kind],
+  };
+  return executeAction(action, dryRun, undefined, undefined, true);
 }
 
 export const simulate_transaction = (a: Action) => executeAction(a, true);

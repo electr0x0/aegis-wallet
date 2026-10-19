@@ -98,7 +98,7 @@ Between rules 1 and 2, a request for keys, PINs, seed phrases, API keys, environ
 
 ### 3.2 The permission algorithm (`executeAction`)
 
-Every agent write goes through `executeAction`, whether it comes from the parser, the planner, the setup script's evidence steps or an approval. The only code that signs outside it is the two operator scripts, `deploy-guard.ts` and `attack-demo.ts` (sections 9 and 05). The whole function runs inside `exclusive()`, the process-wide mutex. Policy evaluation, reservation and broadcast therefore cannot interleave.
+Every agent write goes through `executeAction`, whether it comes from the parser, the planner, the setup script's evidence steps, the ledger anchor script or an approval. The only code that signs outside it is the two operator scripts, `deploy-guard.ts` and `attack-demo.ts` (sections 9 and 05). The whole function runs inside `exclusive()`, the process-wide mutex. Policy evaluation, reservation and broadcast therefore cannot interleave.
 
 1. **Validate.** The Zod `actionSchema` accepts:
    - `kind` in `wrap_eth`, `unwrap_weth`, `transfer_token`
@@ -107,7 +107,7 @@ Every agent write goes through `executeAction`, whether it comes from the parser
    - `recipient` as a valid address
    - `prompt` of at most 4,000 characters
 
-   Reads are not accepted here; they have their own tools. Wrap and unwrap are normalised to the canonical WETH contract and token.
+   Reads are not accepted here; they have their own tools. Wrap and unwrap are normalised to the canonical WETH contract and token. The two ledger-anchor kinds are not in `actionSchema` either: they enter only through the operator-only `anchorLedger` (section 5.4), so planner arguments can never select them.
 
 2. **Bind the approval.** On an approval, the pending proposal must still be `AWAITING_HITL_APPROVAL`. Proposals are single-use and bound to an account. A fresh six-digit PIN check is required before approval, and execution uses the stored proposal action.
 3. **Value the action.**
@@ -149,6 +149,8 @@ Every agent write goes through `executeAction`, whether it comes from the parser
 | 7     | Soft reasons, collected together: recipient not whitelisted; value above the single-transaction cap; rolling spend plus value above the 24-hour cap; runway after the transfer below the floor; "always ask" enabled | Any reason gives `TIER_2_HITL` (risk 65). No reason gives `TIER_1_AUTO` (risk 10)              |
 
 Hard blocks (rows 1, 2, 4, 5 and 6) cannot be overridden by approval. Approval re-runs the whole algorithm against the current policy and a fresh simulation.
+
+A ledger anchor leaves this table after row 2 and takes its own fixed branch (section 5.4). It is `TIER_1_AUTO` or `BLOCKED`, never `TIER_2_HITL`, so "always ask" does not hold it.
 
 **Reserve-runway floor.** For `transfer_token` and `fund_account` (a wrap does not leave the wallet), the engine computes:
 
@@ -300,7 +302,19 @@ Boundaries of this guarantee:
 
 - **Pending proposals are not in the chain.** The creation of each proposal is a sealed `AWAITING_HITL_APPROVAL` entry, but the mutable proposal records in `pending` are not hashed.
 - **Rotating the agent key breaks verification of earlier history.** This is by design: entries signed by any key other than the configured agent key fail.
-- **The seal does not protect against the key holder.** It makes edits by anyone without the agent key detectable. Whoever holds the agent key can rewrite and re-seal the history, and removing the newest entries leaves a valid shorter chain. An external anchor for the latest hash would close this gap; it is not implemented.
+- **The seal does not protect against the key holder.** It makes edits by anyone without the agent key detectable. Whoever holds the agent key can rewrite and re-seal the history, and removing the newest entries leaves a valid shorter chain. The EAS anchor (section 5.4) closes this gap for history up to the last anchor. Entries newer than the last anchor are still unanchored.
+
+### 5.4 External anchor on EAS (`pnpm ledger:anchor`)
+
+An operator step attests the ledger head on the Ethereum Attestation Service, using the Base Sepolia predeploys (EAS v1.2.0): EAS at `0x4200000000000000000000000000000000000021` and the SchemaRegistry at `0x4200000000000000000000000000000000000020`.
+
+- **Schema.** `bytes32 ledgerHead,uint64 entryCount,bytes32 policyHash`, with no resolver and not revocable. Its UID is fixed: `keccak256(abi.encodePacked(schema, resolver, revocable))` = `0x27a1aeb47c1be07b5f370719d1f7c31e00258cafdc56658c700395cc543f3d44`. The script reads `getSchema` and registers the schema only if it is missing.
+- **Data.** `ledgerHead` is the hash of the last sealed entry, `entryCount` the number of entries it covers, and `policyHash` the current policy hash. All three come from the ledger loaded inside `exclusive()`, after `verifyLedger` passes; a broken chain is never anchored. Any `anchor` field in the input is stripped by Zod. Neither the prompt nor the model can supply it.
+- **Path.** `anchorLedger` builds the fixed action and calls `executeAction`, so the chain check, simulation, policy, reservation, hash-before-receipt and no-retry rules all apply. The planner has no anchor tool.
+- **Policy.** The engine decodes the calldata that will be signed. It returns `TIER_1_AUTO` only when the call value and the attestation request value are 0, the target is the EAS predeploy (or the SchemaRegistry for registration), the schema UID is ours, simulation passed and gas is under the ceiling. Anything else is `BLOCKED`.
+- **Guard mode.** AgentGuard's target allowlist excludes EAS, so `guard.execute` would revert. An anchor is therefore sent and simulated directly from the agent EOA, with no guard pre-flight. It cannot move funds; it spends only the EOA's gas ETH.
+- **Record.** The usual `BROADCASTING` → `SUBMITTED` → `CONFIRMED` entries (intent `LEDGER_ANCHOR`, or `LEDGER_ANCHOR_SCHEMA` for registration). The rationale names the anchored head and count. Once the receipt is mined, the final entry adds `EAS attestation UID <uid>` from the `Attested` event. While an earlier anchor is still `BROADCASTING` or `SUBMITTED` (for up to 24 hours), a new one is refused.
+- **Checking.** Open the attestation on `https://base-sepolia.easscan.org`. Its `ledgerHead` must equal the `hash` of entry number `entryCount` in the exported ledger. `verifyLedger` does not read EAS; this comparison is manual.
 
 ## 6. LLM planner
 
@@ -309,7 +323,7 @@ Boundaries of this guarantee:
 | Provider                 | Gemini through its OpenAI-compatible endpoint (`generativelanguage.googleapis.com/v1beta/openai/chat/completions`), model `GEMINI_MODEL`, default `gemini-3.5-flash-lite`. If `GEMINI_API_KEY` is not set and `OPENAI_API_KEY` is, OpenAI chat completions with `OPENAI_MODEL`, default `gpt-4.1-mini`. This is a configuration choice, not a runtime failover |
 | Tools                    | `get_wallet_portfolio`, `execute_token_transfer`, `simulate_transaction`, `audit_contract_address`, `execute_eth_weth_rebalance`. Each maps to a function in `tools.ts`, and every write goes through `executeAction`                                                                                                                                          |
 | Bounds                   | At most 5 model rounds and 4 tool calls per request. Tool calls are serial (`parallel_tool_calls: false`). The plan stops at the first Tier 2 hold, the first block, or the first broadcast, so the model never gets a chance to resubmit a transaction                                                                                                        |
-| What the model cannot do | Sign anything; approve a pending proposal (approval exists only as an operator API call); call an untyped function; replace the stored prompt (the server overwrites `prompt` in every tool call with the operator's original text); bypass refusals for swaps, yield, staking or bridging, which are applied before the planner runs                          |
+| What the model cannot do | Sign anything; approve a pending proposal (approval exists only as an operator API call); trigger a ledger anchor (an operator script only); call an untyped function; replace the stored prompt (the server overwrites `prompt` in every tool call with the operator's original text); bypass refusals for swaps, yield, staking or bridging, which are applied before the planner runs                          |
 | Without an LLM           | The demo scenarios, single wraps and transfers, portfolio reads and audits all run through the deterministic parser with no API key                                                                                                                                                                                                                            |
 
 The five dashboard scenarios use the deterministic parser. The planner is needed only for multi-step or free-form requests.
@@ -324,10 +338,11 @@ The five dashboard scenarios use the deterministic parser. The planner is needed
 | WETH       | `0x4200000000000000000000000000000000000006`, 18 decimals. `deposit`, `withdraw`, `transfer`, `balanceOf`                                                                                                                            |
 | USDC       | `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, 6 decimals. `transfer`, `balanceOf`                                                                                                                                                    |
 | Native ETH | Value transfer with empty calldata                                                                                                                                                                                                   |
+| EAS        | v1.2.0 predeploys: EAS `0x4200000000000000000000000000000000000021` (`attest`) and SchemaRegistry `0x4200000000000000000000000000000000000020` (`register`, `getSchema`). Used only by the operator's ledger anchor (section 5.4) |
 | AgentGuard | Deployed per operator. The address is written to `GUARD_ADDRESS` in `.env.local` and linked from the dashboard. Deployment and transaction hashes: see the Deliverable 06 evidence export (`data/audit_log.json` → dashboard Export) |
 | Valuation  | Fixed reference prices: ETH = WETH = $2,500, USDC = $1. Not an oracle                                                                                                                                                                |
 
-No other contract can be called by the agent. There are no token approvals, no swaps and no yield integrations. A target-ratio "rebalance" between ETH and WETH uses canonical 1:1 wrapping and carries no slippage.
+The only other contract calls are the two fixed, zero-value EAS calls of the operator's ledger anchor (section 5.4): `SchemaRegistry.register` once, and `EAS.attest`. There are no token approvals, no swaps and no yield integrations. A target-ratio "rebalance" between ETH and WETH uses canonical 1:1 wrapping and carries no slippage.
 
 ## 8. Storage, concurrency and the API boundary
 
@@ -347,6 +362,7 @@ pnpm setup-wallets     # creates .env.local (agent key, vault key and address) w
 pnpm setup-wallets     # optional: once funded, runs two small evidence transactions, each attempted once
 pnpm guard:compile     # rebuilds src/lib/guard/AgentGuard.json from contracts/AgentGuard.sol
 pnpm guard:deploy      # deploys AgentGuard, writes GUARD_ADDRESS, moves funds into the guard
+pnpm ledger:anchor     # optional: attests the ledger head on EAS (--dry-run to only simulate)
 pnpm dev               # http://127.0.0.1:3000
 ```
 
@@ -371,6 +387,8 @@ pnpm dev               # http://127.0.0.1:3000
   - `--force` redeploys; funds in the old guard then need an owner-signed call to recover.
 
   This is an operator step, so it signs with the agent key directly rather than through `executeAction`. `--revoke`, and `--renew` after a revoke, may sign with the owner key instead.
+
+- **`pnpm ledger:anchor`** registers the anchor schema if `getSchema` shows it missing, then attests the current ledger head (section 5.4). Both go through `executeAction` from the agent EOA. Like the other scripts, it is a second ledger writer, so run it while the dashboard is idle.
 
 - **Restart** `pnpm dev` after changing `.env.local`.
 

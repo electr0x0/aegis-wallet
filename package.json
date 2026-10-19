@@ -15,7 +15,8 @@
     "guard:deploy": "tsx --env-file-if-exists=.env.local scripts/deploy-guard.ts",
     "guard:attack": "tsx --env-file-if-exists=.env.local scripts/attack-demo.ts",
     "guard:verify": "node --env-file-if-exists=.env.local scripts/verify-guard.mjs",
-    "verify:evidence": "tsx scripts/verify-evidence.ts"
+    "verify:evidence": "tsx scripts/verify-evidence.ts",
+    "ledger:anchor": "tsx --env-file-if-exists=.env.local scripts/anchor-ledger.ts"
   },
   "dependencies": {
     "@svg-animated-icons/react": "^0.1.2",
