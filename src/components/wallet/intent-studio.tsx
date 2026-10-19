@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Expand, Minimize2, X } from "lucide-react";
+import { Bot, Expand, Lock, Minimize2, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgentChat } from "./agent-chat";
 import { useWallet } from "./wallet-provider";
@@ -19,19 +19,33 @@ export function IntentStudio({ onClose }: { onClose?: () => void }) {
       aria-label="Intent Studio copilot"
     >
       <header className="flex h-14 min-h-14 shrink-0 items-center justify-between gap-1.5 border-b pr-3 pl-4">
-        <div className="min-w-0">
-          <h2 className="whitespace-nowrap text-xs font-semibold">
-            Intent Studio{" "}
-            <span className="text-[10px] font-normal text-muted-foreground max-[760px]:hidden">
-              · Autonomous Agent
-            </span>
-          </h2>
-          <span
-            className="font-mono text-[9px] text-muted-foreground data-[active=true]:text-primary"
-            data-active={status === "ACTIVE"}
-          >
-            Session: {status}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg border bg-primary/10 text-primary">
+            <Bot size={16} aria-hidden />
           </span>
+          <div className="min-w-0">
+            <h2 className="whitespace-nowrap text-xs font-semibold">
+              Intent Studio{" "}
+              <span className="text-[10px] font-normal text-muted-foreground max-[760px]:hidden">
+                · Autonomous Agent
+              </span>
+            </h2>
+            <span
+              className="group flex items-center gap-1.5 font-mono text-[9px] text-muted-foreground data-[active=true]:text-primary"
+              data-active={status === "ACTIVE"}
+            >
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex size-full rounded-full bg-current opacity-60 group-data-[active=true]:animate-ping motion-reduce:animate-none" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-current" />
+              </span>
+              {status === "LOCKED" ? (
+                <Lock size={9} aria-hidden />
+              ) : (
+                <ShieldCheck size={9} aria-hidden />
+              )}
+              Session: {status}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <Button
