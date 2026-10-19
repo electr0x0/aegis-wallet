@@ -4,16 +4,20 @@
 //   pnpm guard:deploy --eth 0.005 --usdc 10
 //   pnpm guard:deploy --fund-only     fund an already deployed guard
 //   pnpm guard:deploy --renew         extend the session with an owner-signed setSession
+//   pnpm guard:deploy --revoke        emergency stop: revoke the session key on-chain
 //   pnpm guard:deploy --force         redeploy even if GUARD_ADDRESS is set
 //
 // This is a one-off operator step, not an agent action, so it signs directly with the agent key
-// instead of going through executeAction. Every transaction is recorded in the ledger.
+// instead of going through executeAction. --revoke, and --renew after a revoke, may instead be
+// sent by the owner key (see guard-session.ts). Every transaction is recorded in the ledger.
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import {
+  createWalletClient,
   encodeFunctionData,
   formatEther,
   formatUnits,
+  http,
   parseEther,
   parseUnits,
   zeroAddress,
@@ -21,6 +25,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { baseSepolia } from "viem/chains";
 import artifact from "../src/lib/guard/AgentGuard.json";
 import {
   EXPLORER,
@@ -30,12 +35,11 @@ import {
   account,
   guardAbi,
   guardAddress,
-  outerCall,
   publicClient,
-  signOwnerApproval,
   wallet,
 } from "../src/lib/chain";
 import { exclusive, ledger, log, saveLedger } from "../src/lib/store";
+import { prepareSessionChange, type SessionOp } from "./guard-session";
 
 const BASE_SEPOLIA_CHAIN_ID = 84532;
 const ENV_FILE = ".env.local";
@@ -45,6 +49,7 @@ const { values: flags } = parseArgs({
   options: {
     force: { type: "boolean", default: false },
     renew: { type: "boolean", default: false },
+    revoke: { type: "boolean", default: false },
     "fund-only": { type: "boolean", default: false },
     eth: { type: "string", default: "0.002" },
     usdc: { type: "string" },
@@ -61,12 +66,26 @@ function sessionExpiry(): bigint {
   return BigInt(nowSeconds() + Math.round(hours * 3600));
 }
 
-function ownerAddress(): Hex {
+function ownerAccount() {
   const key = process.env.VAULT_PRIVATE_KEY;
   if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) {
     throw new Error("VAULT_PRIVATE_KEY missing. Run pnpm setup-wallets first.");
   }
-  return privateKeyToAccount(key as Hex).address;
+  return privateKeyToAccount(key as Hex);
+}
+
+function ownerAddress(): Hex {
+  return ownerAccount().address;
+}
+
+// The owner sends its own transactions only for --revoke and --renew, when the relay can't be used.
+function ownerWallet() {
+  const url = process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
+  return createWalletClient({
+    account: ownerAccount(),
+    chain: baseSepolia,
+    transport: http(url, { timeout: 15000, retryCount: 1 }),
+  });
 }
 
 function vaultAddress(): Hex {
@@ -205,26 +224,30 @@ async function fund(guard: Hex) {
   await fundUsdc(guard, usdc);
 }
 
-// The owner signs setSession off-chain; the agent submits it through executeApproved and pays gas.
-async function renew(guard: Hex) {
-  const agent = account().address;
-  const expiry = sessionExpiry();
-  const inner = {
-    to: guard,
-    value: 0n,
-    data: encodeFunctionData({
-      abi: guardAbi,
-      functionName: "setSession",
-      args: [agent, expiry],
-    }),
-  };
-  const approval = await signOwnerApproval(inner);
-  const hash = await wallet().sendTransaction(outerCall(inner, approval));
-  await confirm("Session renewal", hash);
-  const until = new Date(Number(expiry) * 1000).toISOString();
-  await record("SETUP_GUARD_RENEW", hash, [
-    `Owner-signed setSession: ${agent} until ${until}`,
-  ]);
+const SESSION_STEPS: Record<SessionOp, { label: string; intent: string }> = {
+  revoke: { label: "Emergency stop", intent: "SETUP_GUARD_REVOKE" },
+  renew: { label: "Session renewal", intent: "SETUP_GUARD_RENEW" },
+};
+
+// Normally the owner signs off-chain and the agent relays through executeApproved, paying gas.
+// After a revoke the owner sends setSession itself. guard-session.ts picks the path and simulates.
+async function changeSession(guard: Hex, op: SessionOp) {
+  const { label, intent } = SESSION_STEPS[op];
+  const change = await prepareSessionChange(op, {
+    guard,
+    owner: ownerAddress(),
+    expiry: sessionExpiry(),
+  });
+  const sender = change.path === "owner" ? "Owner" : "Session key";
+  console.log(
+    `${label}: simulation passed. ${sender} ${change.payer} sends it.`,
+  );
+
+  const client = change.path === "owner" ? ownerWallet() : wallet();
+  const hash = await client.sendTransaction(change.call);
+  await confirm(label, hash);
+  await record(intent, hash, change.reasons);
+  for (const warning of change.warnings) console.warn(`WARNING: ${warning}`);
 }
 
 async function main() {
@@ -234,9 +257,13 @@ async function main() {
   }
 
   const existing = guardAddress();
-  if (flags.renew || flags["fund-only"]) {
+  if (flags.revoke && (flags.renew || flags["fund-only"] || flags.force)) {
+    throw new Error("--revoke runs on its own.");
+  }
+  if (flags.revoke || flags.renew || flags["fund-only"]) {
     if (!existing) throw new Error("GUARD_ADDRESS is not set. Deploy first.");
-    if (flags.renew) await renew(existing);
+    if (flags.revoke) await changeSession(existing, "revoke");
+    if (flags.renew) await changeSession(existing, "renew");
     if (flags["fund-only"]) await fund(existing);
     return;
   }
@@ -245,7 +272,7 @@ async function main() {
       `AgentGuard already deployed at ${EXPLORER}/address/${existing}`,
     );
     console.log(
-      "Use --force to redeploy, --fund-only to fund it, or --renew to extend the session.",
+      "Use --force to redeploy, --fund-only to fund it, --renew to extend the session, or --revoke for the emergency stop.",
     );
     return;
   }

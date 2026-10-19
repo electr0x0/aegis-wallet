@@ -68,6 +68,16 @@ This script covers the recorded demo video (Deliverable 03, optional, 5 minutes 
 | **Say**       | "Now assume the attacker has our agent's key and skips every check we just showed: no policy, no injection filter, no human. They call the contract directly. Drain the USDC: refused, the recipient isn't allowed. Send more than the cap: refused. Grant themselves an unlimited allowance: refused, the contract doesn't allow `approve` at all. The last one we actually broadcast, and the chain reverted it. Anyone can check that on BaseScan. One honest caveat: in this prototype the owner key lives on the same server. The guard protects against a compromised model, agent logic or session key, not against a full server compromise. In production the owner key belongs on a separate device." |
 | **Scores**    | Security and compliance (30%): enforcement that survives off-chain compromise. On-chain exploration bonus: a reverted attack transaction as public evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
+### Optional — Emergency stop
+
+| | |
+|---|---|
+| **Before** | The owner (the vault) pays its own gas to renew after a revoke. While the session is live, give it a little ETH from the dashboard: `Send 0.0001 ETH to <vault address>` (Tier 1, because the vault is whitelisted). Check that the owner balance is above zero on BaseScan |
+| **Do** | Leave the dashboard idle. Run `pnpm guard:deploy --revoke`, then `pnpm guard:attack`, then `pnpm guard:deploy --renew` |
+| **On screen** | **Revoke:** `Emergency stop: simulation passed. Owner 0x… sends it.` and a BaseScan link.<br>**Attack run:** all three attacks → `On-chain guard rejected: NotSessionKey`. The session-key check runs before the expiry check, so it is not `SessionExpired`.<br>**Renew:** `Session renewal: simulation passed. Owner 0x… sends it.` The agent cannot relay any more, so the owner sends `setSession` itself. Reload the dashboard: the guard panel shows a live session again |
+| **Say** | "If the agent misbehaves, the operator pulls one switch. The owner key revokes the session on-chain, and from that block the agent's key can't move anything the guard holds, not even within its limits. Only the owner can switch it back on." |
+| **Scores** | Security and compliance (30%): human supervision and intervention for an AI that moves funds (NFRA 金发〔2026〕8号). On-chain exploration bonus: two more owner transactions on BaseScan |
+
 **Close (video only).** Open Evidence, point at "Ledger verified · N sealed", and click **Export JSON + Markdown**. Say: "Every decision, its reason, the policy in force, chained and signed. This export is our execution evidence."
 
 ## 3. Recorded video, 5 minutes
@@ -102,6 +112,7 @@ Each Tier 1 or Tier 2 request waits for the receipt (timeout 60 s). Cut the wait
 - If the RPC is slow, play the recorded segment for that demo.
 - If the LLM is unavailable, skip the optional segment; Demos 1–4 do not use it.
 - If the session has expired, run `pnpm guard:deploy --renew` before going on stage.
+- If `--renew` after a revoke says the owner needs ETH, fund the printed owner address from a faucet, then run it again. The agent cannot fund it once the session is revoked.
 
 **Likely questions:**
 
