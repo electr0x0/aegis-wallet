@@ -18,6 +18,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { IntentStudio } from "./intent-studio";
 import { TelemetryRibbon } from "./telemetry-ribbon";
+import { ExecutionControl } from "./execution-control";
 import { VIEW_LABELS } from "./console-views";
 import { SecurityBanner } from "./security-banner";
 import { useWallet } from "./wallet-provider";
@@ -127,6 +128,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                         <X size={14} />
                       </Button>
                     </div>
+                  )}
+                  {(tab === "command" || tab === "policy") && (
+                    <ExecutionControl />
                   )}
                   {children}
                 </div>

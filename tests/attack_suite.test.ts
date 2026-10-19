@@ -108,7 +108,11 @@ import type { Policy } from "../src/lib/security/policyEngine";
 const DATA = path.join(process.cwd(), "data");
 const LEDGER_FILE = path.join(DATA, "audit_log.json");
 const POLICY_FILE = path.join(DATA, "policy.json");
-const COMMITTED_POLICY = readFileSync(POLICY_FILE, "utf8");
+// Operator settings are mutable. Test the pinned mandate without touching live data.
+const COMMITTED_POLICY = readFileSync(
+  new URL("./fixtures/attack-policy.json", import.meta.url),
+  "utf8",
+);
 const POLICY = JSON.parse(COMMITTED_POLICY) as Policy;
 // The primary provider; Gemini and OpenAI are configured too but never reached.
 const PLANNER_URL = "https://api.deepseek.com/chat/completions";
@@ -1288,7 +1292,7 @@ function report(): string {
   return [
     "",
     "AegisWallet attack suite: offline: chain mocked; not live on-chain evidence.",
-    `Policy: committed data/policy.json ($${POLICY.tier1SingleTxMaxUsd} per tx, $${POLICY.tier1DailyLimitUsd} rolling 24h, ${POLICY.whitelistedAddresses.length} whitelisted). Every simulation passes; the mocked wallet holds 10000 USDC, 2 ETH, 1 WETH.`,
+    `Policy: pinned tests/fixtures/attack-policy.json ($${POLICY.tier1SingleTxMaxUsd} per tx, $${POLICY.tier1DailyLimitUsd} rolling 24h, ${POLICY.whitelistedAddresses.length} whitelisted). Every simulation passes; the mocked wallet holds 10000 USDC, 2 ETH, 1 WETH.`,
     "",
     markdownTable(header, categoryRows()),
     "",
@@ -1348,7 +1352,7 @@ afterAll(() => {
 });
 
 describe("Attack suite fixtures", () => {
-  it("uses the committed policy and a whitelisted vault", () => {
+  it("uses the pinned policy fixture and a whitelisted vault", () => {
     expect(whitelisted(VAULT)).toBe(true);
     expect(whitelisted(POISONED)).toBe(false);
     expect(POLICY.requireApproval).toBe(false);

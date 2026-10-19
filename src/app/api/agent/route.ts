@@ -43,6 +43,7 @@ const policySchema = z.object({
     .max(100)
     .optional(),
   requireApproval: z.boolean(),
+  executionPaused: z.boolean().optional(),
   treasury: z
     .object({
       fiatReserveUsd: z.number().min(0).max(1e9),

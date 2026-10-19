@@ -454,3 +454,7 @@ The prototype is testnet-only, single-process and single-operator. It values ass
 | Hash chain (sealed entry) | Each ledger entry contains the fingerprint of the one before it, so editing any entry breaks every later fingerprint                                                                                     |
 | EAS anchor                | A record on the Ethereum Attestation Service, a public on-chain registry. We post the ledger's latest fingerprint there, so history up to that point cannot be quietly rewritten                         |
 | ERC-4337                  | The standard for smart-contract wallets with bundlers and paymasters. AgentGuard applies the same session-key idea without that infrastructure                                                           |
+
+## Local execution pause
+
+`executionPaused` is an optional policy flag. The pure gate checks it before every write branch, including onboarding and anchors. Tier 2 approval re-reads policy and cannot override the pause. The dashboard changes the flag through the existing account-bound, PIN-protected policy API inside `exclusive()`, recording the policy hash transition. Read-only tools remain available. This is a local process control, not an on-chain key revocation.

@@ -51,6 +51,7 @@ export type Policy = {
   whitelistedAddresses: string[];
   blacklistedAddresses: string[];
   requireApproval: boolean;
+  executionPaused?: boolean;
   treasury?: Treasury;
   payees?: Payee[];
 };
@@ -269,6 +270,9 @@ export function evaluateTransactionPolicy(
   policy: Policy,
   context: PolicyContext,
 ): Decision {
+  if (policy.executionPaused && action.kind !== "read") {
+    return block("Local execution is paused by the operator");
+  }
   // Hard blocks first. Human approval cannot override any of these.
   if (listed(policy.blacklistedAddresses, action.recipient)) {
     return block("Blacklisted recipient");

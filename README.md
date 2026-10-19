@@ -175,3 +175,7 @@ This is a testnet-only prototype for a single local operator:
 The dashboard uses official GodUI and GodUI Lab source components. [docs/GODUI_INTEGRATION.md](docs/GODUI_INTEGRATION.md) documents the MCP configuration, the component mapping and the local adaptations. Run `pnpm godui:check` to verify the installed MCP server.
 
 The console composes Lab Bento Grid/Card, Spotlight Card, Breadcrumbs, Agent Timeline/Step, Number Ticker, Conversation Thread, Prompt Composer, Prompt Suggestions and Hold Confirm Button. Evidence uses Lab Filter Bar for combined tier, status and simulation filters. Provisioning presets use GodUI Radio Group. Workspace CSS handles pane geometry and responsive behavior; the registry components supply their own styling and motion.
+
+## Local execution pause
+
+Command Center and Guardrails expose a PIN-protected local execution pause. It hard-blocks all writes, including approvals and ledger anchors, while reads remain available. Resuming requires a fresh policy-save PIN and preserves all other limits. It does not revoke a compromised key on-chain; use the documented owner emergency-stop procedure for that. Attack tests use a pinned fixture, so changing operator settings no longer breaks their assumptions.
