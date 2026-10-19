@@ -52,6 +52,7 @@ import {
   type Decision,
   type LedgerAnchor,
   type Policy,
+  type PolicyContext,
 } from "../security/policyEngine";
 import {
   exclusive,
@@ -91,6 +92,7 @@ const ANCHOR_PROMPTS: Record<AnchorKind, string> = {
 };
 
 type Inspection = {
+  context: PolicyContext;
   decision: Decision;
   usd: number;
   gasEstimate: string;
@@ -248,6 +250,8 @@ async function inspect(
   });
   const usd = referenceUsd(a);
   const spentUsd = autonomousSpendUsd(l);
+  let gasGwei = 0;
+  let holdings: number | undefined;
   const finish = (
     decision: Decision,
     gasEstimate: string,
@@ -264,6 +268,13 @@ async function inspect(
       message: `${decision.tier}: ${decision.reasons.join("; ")}`,
     });
     return {
+      context: {
+        usd,
+        spentUsd,
+        gasGwei,
+        simulation: !error,
+        holdingsUsd: holdings,
+      },
       decision,
       usd,
       gasEstimate,
@@ -301,8 +312,6 @@ async function inspect(
   if (early.tier === "BLOCKED") return finish(early, "0", "Blocked before RPC");
 
   let gasEstimate = "0";
-  let gasGwei = 0;
-  let holdings: number | undefined;
   let error = "";
   reportProgress({
     stage: "simulation",
@@ -339,6 +348,58 @@ async function inspect(
   }
   return finish(decision, gasEstimate, error);
 }
+
+export const policyComparisonSchema = z.object({
+  action: actionSchema.extend({
+    kind: z.enum(["wrap_eth", "unwrap_weth", "transfer_token"]),
+  }),
+  limits: z
+    .object({
+      tier1SingleTxMaxUsd: z.number().min(0).max(10000),
+      tier1DailyLimitUsd: z.number().min(0).max(10000),
+      requireApproval: z.boolean(),
+    })
+    .strict(),
+});
+
+// Read-only: reuses the execution inspector but never creates a proposal, reserves or signs.
+export async function comparePolicy(input: unknown) {
+  const { action, limits } = policyComparisonSchema.parse(input);
+  const a = normalize(action);
+  const [l, p] = await Promise.all([ledger(), policy()]);
+  const current = await inspect(a, l, p, false);
+  const hypotheticalPolicy = { ...p, ...limits };
+  let hypothetical =
+    current.decision.tier === "BLOCKED"
+      ? current.decision
+      : evaluateTransactionPolicy(a, hypotheticalPolicy, current.context);
+  // A looser server cap never removes the separate contract's limits.
+  if (
+    hypothetical.tier === "TIER_1_AUTO" &&
+    current.decision.tier !== "TIER_1_AUTO"
+  ) {
+    const rejection = await guardRejection(a);
+    if (rejection) hypothetical = blocked(rejection);
+  }
+  return {
+    action: a,
+    current: { decision: current.decision, rationale: current.rationale },
+    hypothetical: {
+      decision: hypothetical,
+      rationale: explainDecision(a, hypothetical, {
+        usd: current.usd,
+        spentUsd: current.context.spentUsd,
+        policy: hypotheticalPolicy,
+        simulation: current.context.simulation,
+      }),
+    },
+    simulation: current.error || "PASSED",
+    gasEstimate: current.gasEstimate,
+    policyHash: policyHash(p),
+    comparedAt: new Date().toISOString(),
+  };
+}
+export type PolicyComparison = Awaited<ReturnType<typeof comparePolicy>>;
 
 function baseEntry(a: Action, check: Inspection, p: Policy): NewEntry {
   return {

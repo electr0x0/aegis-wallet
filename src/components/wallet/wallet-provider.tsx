@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import type { Policy } from "@/lib/security/policyEngine";
+import type { Action } from "@/lib/security/policyEngine";
+import type { PolicyComparison } from "@/lib/agent/tools";
 import { describeError, describeResult, messageStatus } from "./agent-reply";
 import {
   blockedTrip,
@@ -320,6 +322,17 @@ function useWalletState() {
     decide,
     savePolicy,
     exportEvidence,
+    comparePolicy: (
+      action: Action,
+      limits: Pick<
+        Policy,
+        "tier1SingleTxMaxUsd" | "tier1DailyLimitUsd" | "requireApproval"
+      >,
+    ) =>
+      request({
+        type: "policy_compare",
+        comparison: { action, limits },
+      }) as Promise<PolicyComparison>,
     previewTreasury: (settings: MandateSettings) =>
       request({ type: "treasury_preview", settings }) as Promise<
         SweepCalculation & {

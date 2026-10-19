@@ -7,18 +7,22 @@ import {
 import { PolicyControls } from "@/components/wallet/policy-controls";
 import { useWallet } from "@/components/wallet/wallet-provider";
 import { TreasuryView } from "@/components/wallet/treasury-view";
+import { PolicyLab } from "@/components/wallet/policy-lab";
 export default function Home() {
   const { tab, snapshot, busy, sessionLocked, savePolicy } = useWallet();
   if (tab === "treasury")
     return <TreasuryView key={snapshot?.activeAccount?.id} />;
   if (tab === "policy")
     return (
-      <PolicyControls
-        key={snapshot?.activeAccount?.id}
-        policy={snapshot?.policy ?? null}
-        busy={busy || sessionLocked}
-        save={savePolicy}
-      />
+      <div className="space-y-4">
+        <PolicyControls
+          key={snapshot?.activeAccount?.id}
+          policy={snapshot?.policy ?? null}
+          busy={busy || sessionLocked}
+          save={savePolicy}
+        />
+        <PolicyLab key={`lab-${snapshot?.activeAccount?.id}`} />
+      </div>
     );
   if (tab === "portfolio")
     return <PortfolioView key={snapshot?.activeAccount?.id} />;

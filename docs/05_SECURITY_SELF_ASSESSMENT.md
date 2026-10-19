@@ -299,3 +299,7 @@ The pause and resume buttons require the same fresh operator PIN as policy saves
 ### Treasury mandate assurance
 
 R26: A stale preview could sweep funds needed for gas, consume another account's budget or evade a reserve after HITL delay. Preview IDs are server-owned, account-bound and consumed once; the five-minute expiry, policy hash and integer reserve/budget calculation are rechecked inside the execution mutex, including a later approval. The destination must remain the configured whitelisted, non-blacklisted vault. A failed recheck is BLOCKED and cannot be approved. The fee buffer is only a conservative projection and prices remain fixed reference valuations. A separate external wallet can change balances after simulation; chain execution remains authoritative. Tests cover rounding, budget deduplication, guard gas, runway, missing assets, disabled policies, quote replay, account isolation and deferred approval rechecks.
+
+### Policy comparison assurance
+
+R27: A policy preview could be mistaken for permission to sign or used to relax a hard block. The lab has no signing or saving path. It permits only bounded spending caps and the always-ask flag, preserves every current hard block and independently rechecks AgentGuard before a hypothetical autonomous classification. Tests assert no transaction, ledger mutation or proposal, unchanged stored settings, and preserved blacklist/simulation failures. State may change after a comparison; every actual execution still reruns the gate. Preview results are not evidence of a transaction.

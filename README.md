@@ -185,3 +185,7 @@ Command Center and Guardrails expose a PIN-protected local execution pause. It h
 The Treasury mandates workspace previews a surplus sweep to the configured, whitelisted vault. Amounts, gas reserves, rolling autonomous spend and runway floors are calculated with bigint base units. AUTO chooses available USDC, then WETH, then ETH. The reference valuation remains $2,500/ETH; it is not a live oracle or a yield strategy.
 
 Previews are read-only, expire after five minutes and carry a server-owned, account-bound, single-use ID. Execution goes through the existing deterministic gate and simulator. The account, expiry, policy hash, available balance, remaining budget, gas reserve and runway are checked again under the execution mutex. The constraints persist with a held proposal and are rechecked on PIN approval; a change requires a new preview. No scheduler, automatic retry, token approval or new contract call is added. Test assets only.
+
+### Policy what-if lab
+
+Under Guardrails & Policy, compare the current decision with hypothetical single/daily caps and an always-ask setting against a real EVM pre-flight. The lab never saves settings, writes evidence, creates a proposal or signs. Existing hard blocks and AgentGuard limits remain enforced. Each result identifies the stored policy hash and snapshot time; execution must run its own checks again.

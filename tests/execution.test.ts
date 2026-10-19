@@ -63,7 +63,7 @@ vi.mock("../src/lib/store", async (importOriginal) => {
     },
   };
 });
-import { executeAction, decide } from "../src/lib/agent/tools";
+import { executeAction, decide, comparePolicy } from "../src/lib/agent/tools";
 import {
   withExecutionProgress,
   type ExecutionProgress,
@@ -85,6 +85,44 @@ beforeEach(() => {
   mocks.portfolio.mockReset().mockResolvedValue({ totalUsd: 0 });
 });
 describe("Serialized execution and approval", () => {
+  it("compares real simulations without writing a proposal, ledger or transaction", async () => {
+    mocks.p.requireApproval = true;
+    const comparison = await comparePolicy({
+      action,
+      limits: {
+        tier1SingleTxMaxUsd: 2,
+        tier1DailyLimitUsd: 5,
+        requireApproval: false,
+      },
+    });
+    expect(comparison.current.decision.tier).toBe("TIER_2_HITL");
+    expect(comparison.hypothetical.decision.tier).toBe("TIER_1_AUTO");
+    expect(mocks.simulate).toHaveBeenCalled();
+    expect(mocks.state).toEqual({ logs: [], pending: [] });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(mocks.p.requireApproval).toBe(true);
+  });
+  it("cannot relax hard blocks or failed simulation with hypothetical limits", async () => {
+    const limits = {
+      tier1SingleTxMaxUsd: 10000,
+      tier1DailyLimitUsd: 10000,
+      requireApproval: false,
+    };
+    const blocked = await comparePolicy({
+      action: { ...action, recipient: mocks.p.blacklistedAddresses[0] },
+      limits,
+    });
+    expect(blocked.current.decision.tier).toBe("BLOCKED");
+    expect(blocked.hypothetical.decision.tier).toBe("BLOCKED");
+    mocks.simulate.mockRejectedValue(new Error("TEST_ONLY simulation failure"));
+    const failed = await comparePolicy({ action, limits });
+    expect(failed.hypothetical.decision.tier).toBe("BLOCKED");
+    expect(mocks.state.logs).toHaveLength(0);
+    expect(mocks.send).not.toHaveBeenCalled();
+    await expect(
+      comparePolicy({ action, limits: { ...limits, maxGasGwei: 1000 } }),
+    ).rejects.toThrow();
+  });
   it("rechecks persistent mandate gas constraints when a human later approves", async () => {
     const { policyHash } = await import("../src/lib/store");
     mocks.p.requireApproval = true;

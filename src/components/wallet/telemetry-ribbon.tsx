@@ -54,7 +54,11 @@ export function TelemetryRibbon() {
         <span>
           Deterministic Policy Engine
           <strong className="block font-semibold">
-            {snapshot ? "ACTIVE" : "CONNECTING"}
+            {snapshot?.policy.executionPaused
+              ? "WRITES PAUSED"
+              : snapshot
+                ? "ACTIVE"
+                : "CONNECTING"}
           </strong>
         </span>
       </div>

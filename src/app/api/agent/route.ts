@@ -3,7 +3,12 @@ import { isAddress } from "viem";
 import { z } from "zod";
 import { runIntent } from "@/lib/agent/runner";
 import { withExecutionProgress } from "@/lib/agent/progress";
-import { autoDrip, decide } from "@/lib/agent/tools";
+import {
+  autoDrip,
+  decide,
+  comparePolicy,
+  policyComparisonSchema,
+} from "@/lib/agent/tools";
 import { executeMandate, previewMandate } from "@/lib/treasury/mandates";
 import { mandateSchema } from "@/lib/treasury/calculate";
 import {
@@ -74,6 +79,11 @@ const policySchema = z.object({
 });
 
 const postSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("policy_compare"),
+    accountId: z.string(),
+    comparison: policyComparisonSchema,
+  }),
   z.object({
     type: z.literal("treasury_preview"),
     accountId: z.string(),
@@ -325,6 +335,8 @@ export async function POST(req: NextRequest) {
     return await withAccount(context, async () => {
       let result: unknown;
       if (body.type === "intent") result = await runIntent(body.prompt);
+      else if (body.type === "policy_compare")
+        result = await comparePolicy(body.comparison);
       else if (body.type === "treasury_preview")
         result = await previewMandate(body.settings);
       else if (body.type === "treasury_execute")
