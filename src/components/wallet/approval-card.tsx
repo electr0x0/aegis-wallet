@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  AlertTriangle,
   LockKeyhole,
   ShieldCheck,
   ArrowUpRight,
@@ -19,14 +20,121 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-import type { Proposal } from "@/lib/store";
+import { formatUsd, type ProposalView } from "./types";
+
+type FactsProps = {
+  proposal: ProposalView;
+  whitelist?: string[];
+  guarded: boolean;
+};
+
+function RecipientStatus({
+  recipient,
+  whitelist,
+}: {
+  recipient: string;
+  whitelist?: string[];
+}) {
+  if (!whitelist) return null;
+  const known = whitelist.some(
+    (address) => address.toLowerCase() === recipient.toLowerCase(),
+  );
+  if (known) {
+    return (
+      <span className="mt-1.5 flex items-center gap-1.5 text-xs text-[var(--emerald)]">
+        <ShieldCheck size={13} /> Whitelisted recipient
+      </span>
+    );
+  }
+  return (
+    <span className="mt-1.5 flex items-center gap-1.5 text-xs text-[var(--amber)]">
+      <AlertTriangle size={13} /> Unknown recipient: not on the whitelist
+    </span>
+  );
+}
+
+function signingNote(guarded: boolean) {
+  return guarded
+    ? "Approval is signed by the owner key and verified on-chain by AgentGuard."
+    : "Approval executes with the server-held agent key.";
+}
+
+// Shared by the card and the review dialog so both show the same evidence.
+function ProposalFacts({ proposal, whitelist, guarded }: FactsProps) {
+  const { action, decision } = proposal;
+  return (
+    <dl className="approval-details">
+      <div>
+        <dt>Amount</dt>
+        <dd>
+          {action.amount} {action.token}{" "}
+          <span className="text-muted-foreground">
+            · {formatUsd(proposal.usd)} reference value
+          </span>
+        </dd>
+      </div>
+      <div>
+        <dt>Recipient</dt>
+        <dd>
+          <span className="block break-all font-mono text-xs">
+            {action.recipient}
+          </span>
+          <RecipientStatus recipient={action.recipient} whitelist={whitelist} />
+        </dd>
+      </div>
+      <div>
+        <dt>Pre-flight</dt>
+        <dd className="flex items-center gap-1.5">
+          <ShieldCheck size={14} className="shrink-0 text-[var(--emerald)]" />
+          Simulation passed · {proposal.gasEstimate} gas units
+        </dd>
+      </div>
+      <div>
+        <dt>Policy reasons</dt>
+        <dd>
+          <ul className="approval-reasons list-disc space-y-1 pl-4">
+            {decision.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </dd>
+      </div>
+      {decision.runwayMonths !== undefined && (
+        <div>
+          <dt>Reserve runway</dt>
+          <dd>
+            {(Math.floor(decision.runwayMonths * 10) / 10).toFixed(1)} months
+            after this transfer
+          </dd>
+        </div>
+      )}
+      {proposal.rationale && (
+        <div>
+          <dt>Deterministic rationale</dt>
+          <dd className="text-xs leading-relaxed">{proposal.rationale}</dd>
+        </div>
+      )}
+      <div>
+        <dt>Signing</dt>
+        <dd className="flex items-start gap-1.5 text-xs">
+          <LockKeyhole size={13} className="mt-0.5 shrink-0" />
+          {signingNote(guarded)}
+        </dd>
+      </div>
+    </dl>
+  );
+}
 
 export function ApprovalCard({
   proposal,
+  whitelist,
+  guarded = false,
   busy,
   onDecide,
 }: {
-  proposal: Proposal;
+  proposal: ProposalView;
+  whitelist?: string[];
+  guarded?: boolean;
   busy: boolean;
   onDecide: (id: string, approve: boolean) => Promise<void>;
 }) {
@@ -35,37 +143,32 @@ export function ApprovalCard({
     setOpen(false);
     void onDecide(proposal.id, true);
   };
+  const facts = (
+    <ProposalFacts
+      proposal={proposal}
+      whitelist={whitelist}
+      guarded={guarded}
+    />
+  );
   return (
-    <SpotlightCard
-      className="approval-card"
-      glowColor="rgba(231, 190, 117, .08)"
-    >
-      <div className="section-label text-amber-200">
+    <SpotlightCard className="approval-card" glowColor="rgba(168, 93, 10, .06)">
+      <div className="section-label">
         <LockKeyhole size={14} /> HUMAN AUTHORIZATION{" "}
         <span className="ml-auto">TIER 02</span>
       </div>
-      <h3 className="mt-4 text-2xl font-medium">
+      <h3 className="my-4 text-2xl font-medium">
         {proposal.action.amount}{" "}
         <span className="text-muted-foreground">{proposal.action.token}</span>
       </h3>
-      <p className="my-3 break-all font-mono text-xs text-muted-foreground">
-        {proposal.action.recipient}
-      </p>
-      <p className="text-xs text-amber-100/80">
-        {proposal.decision.reasons.join(" · ")}
-      </p>
-      <div className="my-4 flex items-center gap-2 text-xs text-muted-foreground">
-        <ShieldCheck size={14} /> Simulation passed · {proposal.gasEstimate} gas
-        units
-      </div>
-      <div className="flex flex-wrap gap-2">
+      {facts}
+      <div className="mt-4 flex flex-wrap gap-2">
         <AlertDialog open={open} onOpenChange={setOpen}>
           <AlertDialogTrigger asChild>
             <Button disabled={busy} size="sm">
               Review & approve <ArrowUpRight size={14} />
             </Button>
           </AlertDialogTrigger>
-          <AlertDialogContent>
+          <AlertDialogContent className="max-h-[90vh] overflow-y-auto">
             <AlertDialogHeader>
               <AlertDialogTitle>
                 Authorize this Base Sepolia transaction
@@ -75,28 +178,7 @@ export function ApprovalCard({
                 policy checks and simulation before signing.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <dl className="approval-details">
-              <div>
-                <dt>Amount</dt>
-                <dd>
-                  {proposal.action.amount} {proposal.action.token}
-                </dd>
-              </div>
-              <div>
-                <dt>Recipient</dt>
-                <dd className="break-all font-mono text-xs">
-                  {proposal.action.recipient}
-                </dd>
-              </div>
-              <div>
-                <dt>Estimated gas</dt>
-                <dd>{proposal.gasEstimate} units</dd>
-              </div>
-              <div>
-                <dt>Approval reason</dt>
-                <dd>{proposal.decision.reasons.join("; ")}</dd>
-              </div>
-            </dl>
+            {facts}
             <p
               id={`hold-help-${proposal.id}`}
               className="text-xs text-muted-foreground"

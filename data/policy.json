@@ -1,15 +1,19 @@
 {
-  "tier1SingleTxMaxUsd": 2,
-  "tier1DailyLimitUsd": 5,
+  "tier1SingleTxMaxUsd": 20,
+  "tier1DailyLimitUsd": 50,
   "maxGasGwei": 25,
   "whitelistedAddresses": [
     "0x4200000000000000000000000000000000000006",
-    "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     "0xf0841Df896811a10E31ae27506FD1A074eC605Ef"
   ],
   "blacklistedAddresses": [
     "0x000000000000000000000000000000000000dead",
     "0xBadC0de000000000000000000000000000000000"
   ],
-  "requireApproval": false
+  "requireApproval": false,
+  "treasury": {
+    "fiatReserveUsd": 8990,
+    "monthlyExpensesUsd": 3000,
+    "minRunwayMonths": 3
+  }
 }

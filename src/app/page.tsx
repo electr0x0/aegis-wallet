@@ -19,6 +19,12 @@ import { AppSidebar } from "@/components/wallet/app-sidebar";
 import { MetricCard } from "@/components/wallet/metric-card";
 import { IntentStudio } from "@/components/wallet/intent-studio";
 import { Telemetry } from "@/components/wallet/telemetry";
+import {
+  SecurityBanner,
+  blockedTrip,
+  refusalTrip,
+  type GuardrailTrip,
+} from "@/components/wallet/security-banner";
 import type { AgentMessage, Snapshot } from "@/components/wallet/types";
 import type { Policy } from "@/lib/security/policyEngine";
 
@@ -28,6 +34,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [notice, setNotice] = useState("");
+  const [trip, setTrip] = useState<GuardrailTrip | null>(null);
   const inFlight = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -72,10 +79,13 @@ export default function Home() {
   async function send(text: string) {
     if (!text.trim() || inFlight.current) return;
     const id = crypto.randomUUID();
+    setTrip(null);
     try {
       const result = await request({ type: "intent", prompt: text });
       const serialized = JSON.stringify(result, null, 2);
-      const status = serialized.includes("BLOCKED")
+      const blocked = blockedTrip(result);
+      setTrip(blocked);
+      const status = blocked
         ? "error"
         : serialized.includes("TIER_2_HITL")
           ? "pending"
@@ -85,9 +95,11 @@ export default function Home() {
         { id, intent: text, result: serialized, status },
       ]);
     } catch (error) {
+      const message = (error as Error).message;
+      setTrip(refusalTrip(message));
       setMessages((current) => [
         ...current,
-        { id, intent: text, result: (error as Error).message, status: "error" },
+        { id, intent: text, result: message, status: "error" },
       ]);
     }
   }
@@ -174,6 +186,8 @@ export default function Home() {
     )
     .reduce((sum, entry) => sum + entry.usd, 0);
   const limit = snapshot?.policy.tier1DailyLimitUsd ?? 5;
+  // Guard mode routes approvals through AgentGuard even if its status read failed.
+  const guarded = Boolean(snapshot?.guard) || live?.mode === "guard";
   const navigate = (view: string) => {
     setTab(view);
     document.getElementById("telemetry")?.scrollIntoView({ block: "start" });
@@ -188,10 +202,11 @@ export default function Home() {
             <header className="app-header">
               <div className="header-identity">
                 <SidebarTrigger />
-                <a href="/" className="wordmark">
-                  aegis<span>wallet</span>
-                  <small>BETA / 01</small>
-                </a>
+                <nav aria-label="Breadcrumb" className="breadcrumb">
+                  <span>Workspace</span>
+                  <span aria-hidden="true">/</span>
+                  <span aria-current="page">Agent control</span>
+                </nav>
               </div>
               <div className="network-status">
                 <span>
@@ -202,9 +217,6 @@ export default function Home() {
             </header>
             <section className="page-heading">
               <div>
-                <div className="eyebrow">
-                  WORKSPACE <span>/</span> AGENT CONTROL
-                </div>
                 <h1>
                   Autonomy, within bounds<span>.</span>
                 </h1>
@@ -262,6 +274,9 @@ export default function Home() {
                 accent={pending.length > 0}
               />
             </section>
+            {trip && (
+              <SecurityBanner trip={trip} onDismiss={() => setTrip(null)} />
+            )}
             {snapshot?.error && (
               <div className="setup-banner" role="status">
                 <Terminal size={18} />
@@ -290,6 +305,8 @@ export default function Home() {
               <IntentStudio
                 messages={messages}
                 pending={pending}
+                whitelist={snapshot?.policy.whitelistedAddresses}
+                guarded={guarded}
                 busy={busy}
                 onSend={send}
                 onDecide={decide}

@@ -19,6 +19,8 @@ import { DownloadIcon } from "@svg-animated-icons/react/download";
 import { CheckIcon } from "@svg-animated-icons/react/check";
 import { InfoCircledIcon } from "@svg-animated-icons/react/info-circled";
 import { PanelLeftIcon } from "@svg-animated-icons/react/panel-left";
+import { ExclamationTriangleIcon } from "@svg-animated-icons/react/exclamation-triangle";
+import { ClockIcon } from "@svg-animated-icons/react/clock";
 
 type IconProps = HTMLAttributes<HTMLSpanElement> & { size?: number };
 export type AppIcon = ComponentType<IconProps>;
@@ -63,3 +65,5 @@ export const Download = icon(DownloadIcon);
 export const Check = icon(CheckIcon);
 export const Info = icon(InfoCircledIcon);
 export const PanelLeft = icon(PanelLeftIcon);
+export const AlertTriangle = icon(ExclamationTriangleIcon);
+export const Clock = icon(ClockIcon);

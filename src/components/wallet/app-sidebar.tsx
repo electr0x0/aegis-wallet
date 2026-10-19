@@ -26,12 +26,19 @@ export function AppSidebar({
   const { isMobile, setOpenMobile } = useSidebar();
   return (
     <Sidebar collapsible="icon" aria-label="Workspace navigation">
-      <SidebarHeader className="h-[85px] justify-center border-b border-sidebar-border">
+      <SidebarHeader className="h-16 justify-center border-b border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild size="lg" tooltip="AegisWallet home">
+            <SidebarMenuButton
+              asChild
+              size="lg"
+              tooltip="AegisWallet home"
+              className="hover:bg-transparent"
+            >
               <a href="/">
-                <ShieldCheck size={24} className="text-primary" />
+                <span className="brand-mark">
+                  <ShieldCheck size={17} />
+                </span>
                 <span className="sidebar-brand">
                   aegis<span>wallet</span>
                 </span>

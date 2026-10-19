@@ -1,31 +1,141 @@
 # 05 — Security self-assessment
 
-## Boundary and permission model
+This assessment covers the AegisWallet prototype as it stands in this repository. The prototype runs on Base Sepolia only, with one local operator and one Node process. It describes what each control does, what it does not do, and how the controls were verified. Architecture and algorithms are in [01 — Technical documentation](01_TECHNICAL_DOCUMENTATION.md).
 
-Tier 0 reads require no signing. Tier 1 writes require successful simulation and bounded policy. Tier 2 proposals are persisted and require an explicit local operator click. Human approval cannot override blacklist, simulation or gas failures. Private keys stay in `.env.local` and server-side viem account objects; API responses and exports contain only public addresses. No browser extension or client-side signing key is used.
+## 1. Trust boundary
 
-The intended deployment is a trusted local workstation with one operator and one Node process. Loopback binding, host validation and exact-origin mutation checks reduce remote access and browser CSRF risk. There is no production authentication, MFA or cryptographic user confirmation; the HITL control is a local UI confirmation. Do not expose the service publicly.
+| Component | Trust assumption |
+|---|---|
+| Operator at the dashboard | Trusted. The only human authority; approves Tier 2 proposals |
+| Server process and `.env.local` | Trusted in this prototype. Holds the agent key and, for now, the owner key (see risk R2) |
+| LLM provider and model output | Untrusted. Can only select typed tools whose arguments are validated; cannot sign or approve |
+| Prompt text | Untrusted. Screened by heuristics, and bounded by policy whatever it says |
+| RPC endpoint | Trusted for availability and simulation results; the chain ID is checked. The AgentGuard limits do not depend on the RPC being honest |
+| AgentGuard contract | The enforcement point of last resort. Its owner key is the root of authority |
 
-## Known-risk and mitigation matrix
+Keys never leave the server. API responses, the dashboard and evidence exports contain only public addresses. There is no browser-side key and no wallet extension.
 
-| Risk | Mitigation | Residual limitation |
+## 2. Permission tiers
+
+### 2.1 Tier × conditions × who signs
+
+| Tier | Conditions | Signer, EOA mode (no guard) | Signer, guard mode |
+|---|---|---|---|
+| **Tier 0 — Observe** | Read-only tools: `get_wallet_portfolio`, `audit_contract_address`. No write path | Nobody | Nobody |
+| **Tier 1 — Autonomous** | Every hard check passes, and all of the following hold:<br>• recipient whitelisted<br>• value ≤ single-transaction cap ($20 default)<br>• rolling 24-hour Tier 1 spend plus value ≤ $50 default<br>• reserve runway after the transfer ≥ floor (transfers only)<br>• "always ask" off<br>• in guard mode, the guard pre-flight accepts the call | Agent key signs the transaction | Session key signs `guard.execute`. The contract re-checks expiry, allowlists and per-asset caps on-chain |
+| **Tier 2 — Human in the loop** | Every hard check passes, but at least one soft condition above fails. Held as a persistent proposal until the operator holds the approve control for one second | Agent key signs after approval | After approval, the server signs the approval digest with the owner key (EIP-191). The session key submits `executeApproved`, and the contract verifies the owner signature, nonce and deadline |
+| **BLOCKED** | Any of:<br>• blacklisted recipient<br>• injection language with a non-whitelisted recipient<br>• a token contract as recipient<br>• non-positive or non-finite value<br>• simulation failure, including wrong chain<br>• gas price above the ceiling<br>• guard pre-flight rejection<br>• owner-approval failure | Nobody | Nobody |
+
+Approval cannot override a hard block. On approval, the stored action is re-evaluated against the current policy and a fresh simulation, and then, in guard mode, against the contract itself. Swaps, yield deposits, staking and bridging are refused before any parsing or planning.
+
+In EOA mode Tier 2 is weaker than in guard mode. The approval is a local UI confirmation followed by a signature from the same agent key. Guard mode turns approval into a cryptographic authorisation that the chain verifies.
+
+### 2.2 Defence in depth
+
+| Attacker controls | Layer 1 (policy) | Layer 2 (simulation) | Layer 3 (AgentGuard) | Outcome |
+|---|---|---|---|---|
+| Prompt text | Applies | Applies | Applies | Bounded by Tier 1 caps; anything larger waits for a human |
+| LLM output | Applies | Applies | Applies | Same; the model cannot sign, approve or replace the prompt |
+| Agent logic, or the off-chain policy file | Bypassed | Bypassed | Applies | Bounded by on-chain caps to allowlisted recipients and call shapes |
+| Session (agent) key | Bypassed | Bypassed | Applies | Same; demonstrated by `pnpm guard:attack` (section 4) |
+| Owner key, or the whole server in this prototype | Bypassed | Bypassed | Bypassed | Full loss of guarded funds (R2) |
+
+## 3. Known-risk matrix
+
+| # | Risk | Mitigation | Residual limitation |
+|---|---|---|---|
+| R1 | **Session-key compromise** (agent key stolen or misused) | Funds live in AgentGuard, not in the agent EOA. The session key can only:<br>• send native ETH or `transfer` tokens to allowlisted recipients (deployed: the vault, which is the owner's address)<br>• wrap and unwrap WETH<br>• stay within per-asset per-tx and per-day caps, until the session expires<br>`approve`, `transferFrom` and `permit` revert. The owner can `revokeSession` at any time | Within its caps the key can still:<br>• move funds to the vault<br>• wrap or unwrap<br>• use up the daily allowance (griefing)<br>• spend the agent EOA's own gas ETH, which is not guarded<br>Each recipient the owner adds widens exposure to caps × recipients. In EOA mode there is no guard and the key controls all funds |
+| R2 | **Owner key co-located with the agent key.** `VAULT_PRIVATE_KEY` is stored in the same `.env.local`, and the server signs the approval after the operator's UI confirmation | The guard checks the owner signature on-chain, and the server signs only after an explicit hold-to-confirm and a fresh policy and simulation pass | In this prototype the guard protects against LLM, agent-logic and session-key compromise, **not against full server compromise**: whoever reads `.env.local` holds both keys. `owner` is immutable, so a leaked owner key cannot be rotated; recovery means moving funds out and redeploying. Production should keep the owner key on a separate device or passkey and sign approvals there, never on the server |
+| R3 | **On-chain guard bypass attempts** | `execute` is callable only by the session key and only before expiry. Calls are restricted by:<br>• target allowlist and recipient allowlist, with the recipient decoded from `transfer` calldata<br>• selector allowlist: `transfer`, `deposit`, `withdraw`<br>• `value == 0` on token calls; a token transfer requires a configured limit<br>• calldata shorter than 4 bytes rejected<br>The guard is not its own allowed target, so admin functions cannot be reached through `execute`. Spend is booked before the external call. Re-entry into `execute` by a recipient fails `NotSessionKey` | Limits are per asset in token units, not per USD. The UTC-day bucket allows up to twice the daily cap across midnight UTC. `withdraw` is unmetered, by design, because value stays in the guard. The guard trusts WETH and USDC to implement `transfer` honestly. The contract is unaudited and has no committed test suite (section 5) |
+| R4 | **Owner-signature replay or forgery** | The digest binds chain ID, guard address, target, value, calldata hash, a single-use 256-bit nonce and a deadline 10 minutes ahead. On-chain checks:<br>• `ecrecover` must return the owner<br>• 65-byte signatures only<br>• low-`s` only (no malleability)<br>• `v` must be 27 or 28<br>• a zero recovered address is rejected<br>The server recomputes the digest locally and refuses to sign if the RPC's value differs | An issued but unsubmitted approval stays valid until its deadline. The only cancellation is `revokeSession`, which blocks `executeApproved` because only the current session key can submit. The owner signs an opaque EIP-191 hash rather than EIP-712 typed data, which is acceptable for a server signer but not for a human hardware-wallet signer |
+| R5 | **Ledger tampering** | Each entry is hash-chained over canonical JSON and EIP-191-signed by the agent key. Each policy-evaluated entry also carries the policy hash, and every policy change is itself a sealed entry with the old and new hashes. `verifyLedger` re-checks every link, hash, signature and signer on every dashboard refresh. With an agent key configured, an unsigned entry fails. The dashboard shows the first broken entry | Detects edits by anyone without the agent key. Cannot detect a rewrite by the key holder, or removal of the newest entries, because there is no external anchor. Pending proposals are mutable state outside the chain; the stored action is re-validated by policy when approved. Rotating the agent key makes earlier history fail verification, by design. The file is local and can be deleted |
+| R6 | **LLM planner abuse** (a manipulated or erratic model) | The model only selects from five typed tools, and every write goes through the same `executeAction`. Arguments are Zod-validated, and reads cannot be smuggled in as a write kind. The operator's original prompt overwrites any model-supplied prompt. There is no signing tool and no approval tool. Other bounds:<br>• 5 rounds and 4 tool calls<br>• serial tool calls<br>• the plan halts at the first hold, block or broadcast<br>Unsupported operations are refused before the planner runs | The model can pick a wrong but valid action inside Tier 1 bounds, such as unwrapping instead of wrapping. The bounds, not the model, are the control. Tool results, including balances and addresses, are sent to the external LLM provider. Planner availability depends on that provider |
+| R7 | **Prompt injection** | One adversarial pattern is shared by the router and the policy engine. Injection with an address is routed to the policy engine and recorded, and it is blocked unless the recipient is whitelisted. A whole-balance request with injection wording is refused. Amounts are never invented: a missing amount is `0`, which is blocked | Heuristics do not catch every phrasing. Injection text with a whitelisted recipient still reaches the normal tiers. The real boundary is amount, recipient and on-chain limits, not text matching |
+| R8 | **Fixed reference price, not an oracle** | Disclosed fixed valuation (ETH = $2,500, USDC = $1); no external price input to manipulate | Stale by design; unsuitable for mainnet limits. The USD caps track market value only approximately |
+| R9 | **Floating-point USD valuation** | Small bounded testnet values. Transaction amounts themselves are encoded in base units with `parseUnits` | Policy comparisons use JavaScript numbers; unsuitable for high-value accounting |
+| R10 | **Window mismatch** between the off-chain rolling 24 hours and the on-chain UTC calendar day | Both limits apply independently; a transaction must pass both | The two budgets reset at different times and can disagree near the UTC day boundary |
+| R11 | **Smart-contract risk in WETH and USDC** | Canonical fixed addresses, a constrained ABI, simulation, and a `true` return check on transfers, both off-chain and in the guard | Simulation cannot prove behaviour at mining time or rule out state changes between check and inclusion |
+| R12 | **RPC downtime or a dishonest RPC** | Timeouts, explicit errors, a chain ID check before every simulation, no simulated success, and a local digest check before owner signing | A single RPC is an availability dependency. A dishonest RPC could fake a simulation pass, but cannot make AgentGuard accept a call it rejects |
+| R13 | **Duplicate execution and concurrency** | Process-wide mutex; durable reservation before broadcast; single-use proposals; no automatic retry; the planner stops after one broadcast | Multiple processes are unsupported. The scripts (`setup-wallets`, `guard:deploy`, `guard:attack --broadcast`) run as a second process and must be run while the dashboard is idle. A crash between send and hash persistence needs manual nonce reconciliation |
+| R14 | **Stale approval** | Approval re-runs policy, chain check and simulation, and in guard mode the contract pre-flight. Owner signatures expire after 10 minutes | Off-chain Tier 2 proposals do not expire on their own |
+| R15 | **Gas price movement** | Fresh gas price at evaluation, checked against the ceiling | The fee market can move after the check; the ceiling does not bound the final fee |
+| R16 | **Misconfiguration** | An invalid `GUARD_ADDRESS` is a hard error, never a silent fallback to the unlimited EOA path. The signer must equal the guard's on-chain owner. Deployment checks chain ID 84532 | Guard limits are set at deployment, and changing them requires owner-signed calls |
+| R17 | **Browser CSRF and remote access** | Loopback-only host check; exact same-origin `Origin` on mutations; the server binds to 127.0.0.1 | No multi-user authentication or MFA. Any trusted local process can call the API. Do not expose it through a proxy |
+| R18 | **Unsupported financial operations** (swaps, yield, staking, bridging) | Refused before parsing or planning; no such integration exists | None of these capabilities is available |
+
+## 4. Attack demonstration: compromised key against AgentGuard
+
+`scripts/attack-demo.ts` plays an attacker who already holds the real session key and skips every off-chain defence: the policy engine, the injection filter and human approval. It calls `AgentGuard.execute` directly, so only the contract stands between the attacker and the funds.
+
+```powershell
+pnpm guard:attack              # simulates three attacks; nothing is sent
+pnpm guard:attack --broadcast  # also sends attack (a), so the on-chain revert is BaseScan evidence
+```
+
+| Attack | Call | Expected guard error (from the contract's check order) |
 |---|---|---|
-| Smart contract vulnerability | Canonical fixed token addresses, constrained ABI, simulation and boolean-return checks | Simulation cannot prove future contract behavior or prevent state changes between call and mining |
-| Oracle manipulation | Disclosed fixed reference valuation, no external pricing input | Fixed prices are stale by design and unsuitable for mainnet risk limits |
-| Prompt injection | Deterministic schema, allowlisted tool kinds, hard policy checks, original prompt retention and suspicious-input heuristics | Heuristics do not detect every phrasing; amount and address policy remain the actual boundary |
-| RPC downtime / dishonest RPC | Timeouts, explicit errors, chain ID checks, no simulated success | Single RPC remains a trust and availability dependency |
-| Session/signing key compromise | Key only on server, ignored secret files, no output of key | Local malware or process compromise can steal the full key; no HSM or limited on-chain session key |
-| Duplicate execution / concurrency | Global single-process mutex, durable reservations, single-use proposals | Multiple processes are unsupported; crash during broadcast requires manual nonce reconciliation |
-| Gas changes | Fresh estimation and gas-price ceiling at evaluation | Fee market can move after the check; gas ceiling is not a guarantee of final total fee |
-| Stale approval | Revalidate policy, chain and simulation immediately before broadcast | No cryptographic user signature or proposal expiry |
-| Ledger alteration | Atomic replacement and application append-only events | Local files are editable and not tamper-evident; immutable external storage is needed for formal audit |
-| USD rounding | Small bounded reference-valued transactions, boundary tests | Floating-point policy valuation is unsuitable for high-value financial accounting |
-| Browser CSRF / remote access | Same-origin mutations and loopback-only host | Trusted local applications can invoke the API; no multi-user authentication |
+| (a) Drain USDC | `USDC.transfer(0x1337…1337, entire guard balance)` | `RecipientNotAllowed` |
+| (b) Oversized ETH | Send 0.05 ETH to the vault (cap 0.01 per transaction) | `PerTxLimitExceeded` |
+| (c) Unlimited allowance | `USDC.approve(0x1337…1337, max)` | `SelectorNotAllowed` |
 
-## Verification
+The script exits with a non-zero code if any attack is not blocked in simulation, and it refuses to broadcast unless attack (a) was blocked. With `--broadcast`, it sends attack (a) with a fixed gas limit, bypassing gas estimation, which would refuse a known revert. It confirms the receipt status is `reverted` and records the attempt in the sealed ledger as `REVERTED_BY_GUARD`. If the session has expired, every attack reverts with `SessionExpired`; run `pnpm guard:deploy --renew` first so the demo exercises the limits rather than expiry.
 
-Vitest covers whitelisted micro-transfers, exact thresholds, oversized transfers, unknown destinations, blacklist precedence, adversarial instructions, simulation failures, gas ceilings, rolling spend, human mode and invalid numeric values. Typecheck/build validate server/client integration. These are not a formal audit and do not prove live testnet execution; real transaction evidence is generated only after funding and confirmation.
+Evidence for the broadcast revert: see the Deliverable 06 evidence export (`data/audit_log.json` → dashboard Export).
 
-## Evidence handling
+## 5. Verification
 
-Each attempted write records time, original intent, tier, status, risk score, simulation result, USD reference value and any transaction hash. Submitted hashes are persisted before awaiting a receipt. `BROADCASTING` without a hash signals an uncertain submission; inspect wallet history before retrying. `SUBMITTED` with a hash may be pending even if receipt polling timed out. `CONFIRMED` requires a successful actual receipt. Export includes all statuses and never invents proof of execution.
+### 5.1 Automated (`pnpm test`, Vitest)
+
+| File | Covers |
+|---|---|
+| `tests/security_and_policy.test.ts` | The policy engine as a pure function:<br>• whitelisted micro-transfer is Tier 1<br>• reads are Tier 0<br>• oversized value and unknown recipient go to Tier 2<br>• blacklist precedence over the whitelist<br>• four adversarial phrasings are blocked<br>• failed simulation is blocked even with "always ask"<br>• gas ceiling<br>• rolling budget<br>• exact thresholds pass<br>• "always ask"<br>• `NaN`, `Infinity`, negative and zero values are blocked |
+| `tests/execution.test.ts` | `executeAction` and `decide`, with the chain mocked in EOA mode:<br>• concurrent requests cannot exceed the autonomous budget<br>• concurrent approvals broadcast at most once<br>• approval re-runs simulation and blocks on failure<br>• dry runs never sign or enqueue<br>• an uncertain broadcast stays reserved and is not retried |
+| `tests/api_access.test.ts` | API boundary: cross-origin, non-loopback and missing-origin mutations are rejected; same-origin requests are accepted |
+| `tests/godui_ui.test.tsx` | Approval UI: an ordinary click does not authorise, a short hold cancels and a full hold authorises once, rejection is routed independently, and the composer respects the backend character limit and busy state |
+
+`pnpm typecheck` and `pnpm build` validate the integration between server and client.
+
+### 5.2 Not covered by committed tests
+
+These paths are exercised at runtime but have no regression test in `tests/`:
+
+- **AgentGuard contract.** There is no committed contract test suite yet. Its behaviour is checked against the deployed contract on Base Sepolia by `pnpm guard:attack`, which re-runs the three attack simulations on every invocation and fails if any is not blocked. The live Tier 1 and Tier 2 flows recorded in Deliverable 06 also exercise it.
+- **Guard-mode server paths:** `outerCall` wrapping, `signOwnerApproval` and its local digest check, `decodeGuardError`, and the guard pre-flight inside `executeAction`. The execution tests run in EOA mode only.
+- **Ledger sealing and `verifyLedger`.** Their output is visible in the dashboard's "Ledger verified" badge and in the exported JSON.
+- **Reserve-runway calculation, `explainDecision` rationales, the intent router and demo parser, the LLM planner loop, and the bytecode scanner.**
+
+None of this is a formal audit, and none of the automated tests proves live testnet execution. Real evidence exists only after funding and confirmation on Base Sepolia.
+
+## 6. Evidence handling
+
+Every attempted write records:
+
+- time and the original intent
+- tier, status and risk score
+- simulation result and USD reference value
+- the deterministic rationale and the policy hash
+- any transaction hash
+
+Each entry is then sealed into the hash chain. Status semantics:
+
+| Status | Meaning |
+|---|---|
+| `BROADCASTING` without a hash | Submission outcome unknown. Inspect the wallet's history before any retry |
+| `SUBMITTED` with a hash | Sent; the receipt may still be pending if polling timed out |
+| `CONFIRMED` | A successful receipt was observed |
+| `REVERTED` | Mined but reverted |
+| `REVERTED_BY_GUARD` | Attack-demo transaction reverted by AgentGuard |
+| `BLOCKED`, `REJECTED`, `DRY_RUN` | Nothing was signed |
+| `AWAITING_HITL_APPROVAL` | Tier 2 proposal created |
+| `COMPLETED` | A Tier 0 portfolio read, or a policy change (`POLICY_UPDATE`) |
+| `SETUP` tier | Operator guard deployment, funding or renewal |
+
+The dashboard Export writes `aegis-evidence.json` (the full sealed entries) and `aegis-evidence.md` (a readable summary with BaseScan links). Neither ever invents proof of execution. The hashes for this submission: see the Deliverable 06 evidence export (`data/audit_log.json` → dashboard Export).
+
+## 7. Path to production
+
+1. Move the owner key off the server, to a hardware wallet or passkey (WebAuthn), and have the operator sign approvals on that device using EIP-712 typed data.
+2. Replace the fixed reference price with a manipulation-resistant oracle, and move USD policy math to integer base units.
+3. Port AgentGuard to a standard modular account (ERC-4337 with an ERC-7579 session-key validator) for bundler and paymaster support. Add a contract test suite and an external audit.
+4. Anchor the latest ledger hash externally, for example on-chain or in a write-once store, and move the ledger to a transactional database for multi-process operation.
+5. Add operator authentication and MFA before any non-local deployment.

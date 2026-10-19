@@ -32,16 +32,29 @@ import {
   AgentStep,
   type StepStatus,
 } from "@/components/godui/agent-timeline";
-import type { Policy } from "@/lib/security/policyEngine";
-import type { Entry } from "@/lib/store";
-import { type Snapshot, type LivePortfolio, shortAddress } from "./types";
+import type { Policy, Treasury } from "@/lib/security/policyEngine";
+import type { Entry, LedgerVerification } from "@/lib/store";
+import { GuardPanel } from "./guard-panel";
+import { SealBadge, VerificationBadge } from "./ledger-badges";
+import { RunwayTile } from "./runway-tile";
+import {
+  EXPLORER,
+  shortAddress,
+  type GuardStatus,
+  type LivePortfolio,
+  type Snapshot,
+} from "./types";
 
 function Portfolio({
   live,
+  guard,
+  treasury,
   loading,
   refresh,
 }: {
   live: LivePortfolio | null;
+  guard?: GuardStatus | null;
+  treasury?: Treasury;
   loading: boolean;
   refresh: () => void;
 }) {
@@ -65,14 +78,16 @@ function Portfolio({
       </div>
       <SpotlightCard
         className="wallet-card"
-        glowColor="rgba(181, 245, 202, .13)"
+        glowColor="rgba(255, 255, 255, .07)"
       >
         <div className="flex items-center gap-3">
           <div className="wallet-emblem">
             <Wallet size={21} />
           </div>
           <div>
-            <h3 className="text-sm font-medium">Agent wallet</h3>
+            <h3 className="text-sm font-medium">
+              {live?.mode === "guard" ? "AgentGuard wallet" : "Agent wallet"}
+            </h3>
             <p className="mt-1 text-[11px] text-muted-foreground">
               Server-side signer · Chain 84532
             </p>
@@ -99,7 +114,19 @@ function Portfolio({
             No live wallet data available
           </p>
         )}
+        {live?.mode && (
+          <p className="mt-3 font-mono text-[11px] text-muted-foreground">
+            Mode ·{" "}
+            {live.mode === "guard" ? "AgentGuard contract holds funds" : "EOA"}
+          </p>
+        )}
+        {live?.agentGasEth !== undefined && (
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+            Agent gas balance · {Number(live.agentGasEth).toFixed(6)} ETH
+          </p>
+        )}
       </SpotlightCard>
+      <GuardPanel guard={guard} live={live} loading={loading} />
       <div className="asset-heading">
         <span>ASSET</span>
         <span>BALANCE / VALUE</span>
@@ -160,9 +187,13 @@ function Portfolio({
           })}
         </div>
       </div>
+      <RunwayTile
+        treasury={treasury}
+        holdingsUsd={live ? live.totalUsd : null}
+      />
       <div className="vault-card">
         <div className="section-label">
-          YIELD VAULT <LockKeyhole size={12} />
+          SAVINGS VAULT (OWNER) <LockKeyhole size={12} />
         </div>
         <p>
           {live?.vault ? (
@@ -341,14 +372,38 @@ function PolicyControls({
   );
 }
 
+const FAILED_STATUSES = [
+  "BLOCKED",
+  "REVERTED",
+  "REVERTED_BY_GUARD",
+  "REJECTED",
+];
+
+const TIER_LABELS: Record<string, string> = {
+  TIER_0: "Tier 0 · Observe",
+  TIER_1_AUTO: "Tier 1 · Autonomous",
+  TIER_2_HITL: "Tier 2 · Human approval",
+  BLOCKED: "Blocked",
+  SETUP: "Setup",
+};
+
 function auditStatus(entry: Entry): StepStatus {
-  if (["BLOCKED", "REVERTED", "REJECTED"].includes(entry.status))
-    return "error";
+  if (FAILED_STATUSES.includes(entry.status)) return "error";
   if (["BROADCASTING", "SUBMITTED"].includes(entry.status)) return "running";
   return entry.status === "AWAITING_HITL_APPROVAL" ? "pending" : "success";
 }
 
-function Evidence({ logs, onExport }: { logs: Entry[]; onExport: () => void }) {
+const readable = (value: string) => value.replaceAll("_", " ");
+
+function Evidence({
+  logs,
+  verification,
+  onExport,
+}: {
+  logs: Entry[];
+  verification?: LedgerVerification;
+  onExport: () => void;
+}) {
   return (
     <div className="telemetry-body" id="audit">
       <div className="section-heading">
@@ -357,6 +412,7 @@ function Evidence({ logs, onExport }: { logs: Entry[]; onExport: () => void }) {
           <NumberTicker value={logs.length} />
         </span>
       </div>
+      <VerificationBadge verification={verification} />
       <p className="supporting-copy mb-5">
         Every decision, with a verifiable record.
       </p>
@@ -374,7 +430,7 @@ function Evidence({ logs, onExport }: { logs: Entry[]; onExport: () => void }) {
           {[...logs].reverse().map((entry, index) => (
             <AgentStep
               key={entry.id}
-              title={entry.tier.replaceAll("_", " ")}
+              title={TIER_LABELS[entry.tier] ?? readable(entry.tier)}
               status={auditStatus(entry)}
               meta={new Date(entry.timestamp).toLocaleTimeString([], {
                 hour: "2-digit",
@@ -387,9 +443,14 @@ function Evidence({ logs, onExport }: { logs: Entry[]; onExport: () => void }) {
                 {entry.intent}
               </p>
               <div className="audit-meta">
-                <span>{entry.status}</span>
+                <span>{readable(entry.status)}</span>
                 <span>Risk {entry.riskScore}/100</span>
               </div>
+              {entry.rationale && (
+                <p className="mb-2 text-[11px] leading-relaxed text-foreground/90">
+                  {entry.rationale}
+                </p>
+              )}
               <p className="break-words text-[11px] text-muted-foreground">
                 Simulation: {entry.simulation}
               </p>
@@ -399,14 +460,16 @@ function Evidence({ logs, onExport }: { logs: Entry[]; onExport: () => void }) {
               {entry.txHash && (
                 <a
                   className="transaction-link"
-                  href={`https://sepolia.basescan.org/tx/${entry.txHash}`}
+                  href={`${EXPLORER}/tx/${entry.txHash}`}
                   target="_blank"
                   rel="noreferrer"
+                  title={entry.txHash}
                 >
-                  {shortAddress(entry.txHash)}
+                  BaseScan · {shortAddress(entry.txHash)}
                   <ExternalLink size={12} />
                 </a>
               )}
+              <SealBadge entry={entry} />
             </AgentStep>
           ))}
         </AgentTimeline>
@@ -459,6 +522,8 @@ export function Telemetry({
         <TabsContent value="portfolio">
           <Portfolio
             live={snapshot?.portfolio || null}
+            guard={snapshot?.guard}
+            treasury={snapshot?.policy.treasury}
             loading={!snapshot}
             refresh={refresh}
           />
@@ -471,7 +536,11 @@ export function Telemetry({
           />
         </TabsContent>
         <TabsContent value="evidence">
-          <Evidence logs={snapshot?.ledger.logs || []} onExport={onExport} />
+          <Evidence
+            logs={snapshot?.ledger.logs || []}
+            verification={snapshot?.verification}
+            onExport={onExport}
+          />
         </TabsContent>
       </Tabs>
       <div className="tier-guide">

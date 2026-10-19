@@ -6,7 +6,7 @@ This workspace follows the [GodUI installation guide](https://godui.design/docs/
 
 - `.codex/config.toml` registers the pinned `@godui/mcp@0.1.0` stdio server for this project only. No global configuration was changed.
 - `.mcp.json` supplies the equivalent portable project configuration for compatible MCP clients.
-- The same exact server package is a development dependency, locked in `package-lock.json`.
+- The same exact server package is a development dependency, locked in `pnpm-lock.yaml`.
 - `codex mcp get godui --json` confirms the project server is enabled. Reload the Codex MCP connection or reopen the project to make newly registered tools available to a new agent session.
 - `pnpm godui:check` independently connects to the installed server over MCP stdio and lists its tools. It does not load `.env.local` or transmit wallet configuration.
 
@@ -35,26 +35,28 @@ Future additions use `pnpm dlx shadcn@4.22.1 add @godui/<name>` or `pnpm dlx sha
 
 ## Component map
 
-| Application surface                         | Official components                          |
-| ------------------------------------------- | -------------------------------------------- |
-| Actions and navigation                      | GodUI Button, Tooltip                        |
-| Workspace navigation                       | GodUI Sidebar, SidebarProvider, SidebarTrigger, SidebarRail, mobile Sheet |
-| Portfolio / guardrails / evidence views     | GodUI Tabs and animated indicator            |
-| Policy editor                               | GodUI Input, Textarea, Slider, Switch        |
-| Allocation and autonomous budget            | GodUI Progress                               |
-| Loading states                              | GodUI Skeleton                               |
-| Transaction review                          | GodUI Alert Dialog + Lab Hold Confirm Button |
-| Metric tiles and wallet / proposal surfaces | Lab Spotlight Card                           |
-| Metric values and evidence count            | Lab Number Ticker                            |
-| Demo scenarios                              | Lab Prompt Suggestions                       |
-| Natural language input                      | Lab Prompt Composer                          |
-| Agent output and audit evidence             | Lab Agent Timeline / Agent Step              |
+| Application surface                         | Official components                                                       |
+| ------------------------------------------- | ------------------------------------------------------------------------- |
+| Actions and navigation                      | GodUI Button, Tooltip                                                     |
+| Workspace navigation                        | GodUI Sidebar, SidebarProvider, SidebarTrigger, SidebarRail, mobile Sheet |
+| Portfolio / guardrails / evidence views     | GodUI Tabs and animated indicator                                         |
+| Policy editor                               | GodUI Input, Textarea, Slider, Switch                                     |
+| Allocation and autonomous budget            | GodUI Progress                                                            |
+| Loading states                              | GodUI Skeleton                                                            |
+| Transaction review                          | GodUI Alert Dialog + Lab Hold Confirm Button                              |
+| Metric tiles and wallet / proposal surfaces | Lab Spotlight Card                                                        |
+| Metric values and evidence count            | Lab Number Ticker                                                         |
+| Demo scenarios                              | Lab Prompt Suggestions                                                    |
+| Natural language input                      | Lab Prompt Composer                                                       |
+| Agent output and audit evidence             | Lab Agent Timeline / Agent Step                                           |
 
 Core files are in `src/components/ui`, Lab files in `src/components/godui`, and application compositions in `src/components/wallet`. Shared GodUI motion hooks are in `src/hooks`.
 
+Four wallet surfaces have no GodUI counterpart and are composed from the theme tokens and the components above: `security-banner.tsx` (guardrail-triggered alert), `guard-panel.tsx` (AgentGuard contract, session key, expiry and per-asset caps), `runway-tile.tsx` (reserve runway against the policy floor) and `ledger-badges.tsx` (sealed-ledger verification and per-entry seal).
+
 ## Theme and local adaptations
 
-`src/app/godui-theme.css` retains the registry theme, spring easings, animations and reduced-motion tokens. `globals.css` imports it and supplies the Aegis dark-green semantic palette and responsive layout. The root HTML element uses `.dark`. A top-level `MotionConfig reducedMotion="user"` honors the user's reduced-motion preference for Lab components.
+`src/app/godui-theme.css` retains the registry theme, spring easings, animations and reduced-motion tokens. `globals.css` imports it and supplies the Aegis light "white ledger" palette and responsive layout: ink for hierarchy, one emerald accent for in-policy states, and amber (human approval) and red (blocked) reserved for tier semantics. The app renders in light mode; the root HTML element has no `.dark` class. A top-level `MotionConfig reducedMotion="user"` honors the user's reduced-motion preference for Lab components.
 
 The Prompt Composer adds `allowAttachments` and `maxLength` props. Attachments are disabled because this wallet accepts text intents only; the input is bounded to the backend's 4,000-character limit. No stop-generation button is shown for on-chain operations because a submitted transaction cannot be cancelled by stopping a browser request.
 
@@ -74,4 +76,4 @@ Application icons use per-icon imports from `@svg-animated-icons/react` ([librar
 
 For a production check alongside a running development server, set `AEGIS_BUILD_DIR=.next-verify` before `pnpm build` to isolate Next.js output. The default output directory remains `.next`.
 
-Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. The 32-test suite includes policy, execution concurrency, local API access, approval review/cancellation/confirmation, and text-only composer behavior. Browser checks cover the desktop and narrow layouts, tabs, live metrics, policy controls, and blocked-request audit rendering. Live portfolio reads and blocked security scenarios can be exercised without funding; live approval/broadcast requires funded Base Sepolia assets.
+Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. The Vitest suite includes policy, execution concurrency, local API access, approval review/cancellation/confirmation, and text-only composer behavior. Browser checks of the light theme measured zero horizontal overflow on the Portfolio, Guardrails and Evidence tabs at 360px and 1024px, and confirmed a visible emerald focus ring on keyboard-focused scenario buttons. Live portfolio reads and blocked security scenarios can be exercised without funding; live approval/broadcast requires funded Base Sepolia assets.

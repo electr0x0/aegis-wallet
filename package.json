@@ -9,7 +9,10 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "setup-wallets": "tsx --env-file-if-exists=.env.local scripts/setup-wallets.ts",
-    "godui:check": "node scripts/godui-mcp.mjs"
+    "godui:check": "node scripts/godui-mcp.mjs",
+    "guard:compile": "node scripts/compile-guard.mjs",
+    "guard:deploy": "tsx --env-file-if-exists=.env.local scripts/deploy-guard.ts",
+    "guard:attack": "tsx --env-file-if-exists=.env.local scripts/attack-demo.ts"
   },
   "dependencies": {
     "@svg-animated-icons/react": "^0.1.2",
@@ -39,6 +42,7 @@
     "jsdom": "^30.1.3",
     "postcss": "^8.5.31",
     "prettier": "3.9.10",
+    "solc": "0.8.37",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

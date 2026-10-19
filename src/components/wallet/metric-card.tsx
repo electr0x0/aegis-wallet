@@ -32,7 +32,8 @@ export function MetricCard({
   return (
     <SpotlightCard
       className={`metric-card ${accent ? "metric-accent" : ""}`}
-      glowColor="rgba(166, 237, 188, 0.09)"
+      glowColor="rgba(11, 122, 86, 0.05)"
+      border={false}
     >
       <div className="metric-label">
         <span>{label}</span>
