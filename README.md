@@ -116,6 +116,9 @@ pnpm guard:deploy --force         #   redeploy (old guard funds need an owner-si
 
 pnpm guard:attack                 # compromised session key against AgentGuard: three simulated attacks
 pnpm guard:attack --broadcast     # also send attack (a), producing a reverted transaction on BaseScan
+
+pnpm guard:verify                 # publish the AgentGuard source to Sourcify and Blockscout (--address 0x...)
+pnpm verify:evidence [path]       # independent read-only ledger check: hashes, signatures, receipts (--offline, --signer)
 ```
 
 The demo prompts and the recording script are in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).

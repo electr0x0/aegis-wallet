@@ -41,3 +41,34 @@ These are recorded in the sealed ledger. They have no transaction hash because n
 `verifyLedger` returned `{ valid: true, entries: 19, sealed: 19 }`. Every entry is hash-chained to the previous one and signed with EIP-191 by the agent key.
 
 The ledger records each status change as its own entry: `BROADCASTING`, then `SUBMITTED`, then `CONFIRMED`. That is why a single hash appears in more than one entry.
+
+## Verify it yourself
+
+The AgentGuard source is publicly verified: `contracts/AgentGuard.sol`, compiled with solc 0.8.37+commit.f401782d, optimizer 200 runs, EVM cancun.
+
+- Sourcify: [`exact_match`](https://repo.sourcify.dev/84532/0xE05aec8Cd8CD122f0988ba835670F64171453A31) for both creation and runtime bytecode, metadata hash included
+- Blockscout: [verified, full match](https://base-sepolia.blockscout.com/address/0xE05aec8Cd8CD122f0988ba835670F64171453A31?tab=contract), with decoded constructor arguments
+- BaseScan: not submitted, because it needs an Etherscan API key.
+
+```powershell
+pnpm guard:verify --address 0xe05aec8cd8cd122f0988ba835670f64171453a31
+pnpm verify:evidence data/audit_log.json
+```
+
+`guard:verify` recompiles the contract and compares it with `eth_getCode`, with the `owner` immutable masked. It then submits the standard JSON input to Sourcify and Blockscout.
+
+`verify:evidence` does not import `src/lib/store.ts`. It reimplements the hashing and signature checks with viem. It then fetches every transaction and receipt from Base Sepolia and checks five things:
+
+- the chain ID is 84532
+- the receipt status matches the ledger
+- the transaction was sent by the ledger signer
+- the guard address and recipient match what the ledger records
+- the deploy transaction created the recorded guard
+
+It never signs and never writes a file. It also accepts the dashboard's `aegis-evidence.json` export. That export holds one account's entries, so links to other accounts' entries show as gaps.
+
+Run against the ledger on 19 October 2026, it printed the line below. The ledger had 25 entries by then; it has grown since the capture above.
+
+```text
+25 entries, chain intact, 25 signatures valid, 8/8 receipts match
+```
