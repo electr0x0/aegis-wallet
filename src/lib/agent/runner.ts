@@ -17,7 +17,29 @@ const MAX_PLANNER_ROUNDS = 5;
 const MAX_TOOL_CALLS = 4;
 // Word boundaries stop a 64-hex hash or key from yielding a truncated "address".
 const ADDRESS = /\b0x[0-9a-fA-F]{40}\b/;
-const AMOUNT = /(\d+(?:\.\d+)?)\s*(USDC|WETH|ETH)/i;
+// Every number followed by a unit, however it is written.
+const ANY_AMOUNT = /\d+(?:\.\d+)?\s*(?:USDC|WETH|ETH)/gi;
+// A cleanly written amount: the lookbehind rejects "1,5 USDC", ".5 ETH" and "1e3 USDC",
+// which a plain match would read as 5 or 3.
+const AMOUNT = /(?<![\w.,-])(\d+(?:\.\d+)?)\s*(USDC|WETH|ETH)/i;
+// "Don't send 5 USDC" must never be parsed as an order to send 5 USDC.
+const NEGATED =
+  /\b(?:don['’]?t|do not|never|not)\s+(?:\w+\s+)?(?:send|transfer|pay|wrap|unwrap)/i;
+// Secrets are never handled in chat: no tool can read one, and such a request never reaches
+// the LLM provider. English plus common translations; base64 blobs are decoded and checked too.
+const SECRET_TERMS = [
+  String.raw`(?:private|secret|signing|owner|vault|master|agent|account|api)(?:'s)?[\s_-]*keys?\b`,
+  String.raw`seed[\s_-]*phrase|recovery[\s_-]*phrase|mnemonic|passphrase|password`,
+  String.raw`\.env\b|env(?:ironment)?[\s_-]*(?:file|var)`,
+  String.raw`\bpins?\b|system[\s_-]*prompt`,
+  "私钥|密钥|助记词|密码|系统提示|秘密鍵|clave privada|frase semilla",
+  "cl[eé] priv[eé]e|mot de passe|chiave privata|privat\\w* schl(?:ü|ue)ssel",
+  "закрытый ключ|приватный ключ",
+];
+const SECRET_REQUEST = new RegExp(SECRET_TERMS.join("|"), "i");
+const BASE64_BLOB = /[A-Za-z0-9+/]{16,}={0,2}/g;
+const SECRET_MESSAGE =
+  "Refused: keys, PINs, seed phrases, API keys, environment files and the system prompt are never disclosed. Nothing was read or signed.";
 // One definition shared with the policy engine, so routing and blocking agree.
 const INJECTION = ADVERSARIAL;
 const WHOLE_BALANCE = /all (?:wallet )?balance|drain/i;
@@ -82,7 +104,7 @@ const definitions = [
 
 export async function runIntent(prompt: string) {
   const address = prompt.match(ADDRESS)?.[0];
-  const amount = prompt.match(AMOUNT);
+  const amount = singleAmount(prompt);
 
   // Injection with a target address goes to the policy engine, which blocks and logs
   // it unless the recipient is whitelisted (then the normal tiers still apply).
@@ -98,6 +120,7 @@ export async function runIntent(prompt: string) {
       prompt,
     });
   }
+  if (asksForSecret(prompt)) throw new Error(SECRET_MESSAGE);
   if (INJECTION.test(prompt) && WHOLE_BALANCE.test(prompt)) {
     throw new Error(
       "Refused: instruction-override language asking to move the whole balance. Nothing was signed.",
@@ -107,7 +130,7 @@ export async function runIntent(prompt: string) {
   if (UNSUPPORTED.test(prompt)) throw new Error(UNSUPPORTED_MESSAGE);
 
   const multiStep = MULTI_STEP.test(prompt);
-  if (amount && !multiStep) {
+  if (amount && !multiStep && !NEGATED.test(prompt)) {
     const action = parseSingleAction(prompt, amount, address);
     if (action) return executeAction(action, /simulate|dry.run/i.test(prompt));
   }
@@ -116,6 +139,30 @@ export async function runIntent(prompt: string) {
   }
   if (/audit/i.test(prompt) && address) return audit_contract_address(address);
   return runPlanner(prompt);
+}
+
+// The demo parser acts only on exactly one cleanly written amount. A malformed one, or two
+// ("instead of 5 USDC, send 0.5 USDC"), leaves the prompt to the planner: no first-match guess.
+function singleAmount(prompt: string): RegExpMatchArray | null {
+  const amounts = prompt.match(ANY_AMOUNT) ?? [];
+  if (amounts.length !== 1) return null;
+  return prompt.match(AMOUNT);
+}
+
+// Decoded base64 blobs, so encoding a request does not slip it past the secret check.
+// Hex addresses and hashes are skipped: they are not base64 text.
+function decodedBlobs(prompt: string): string {
+  const blobs = prompt.match(BASE64_BLOB) ?? [];
+  return blobs
+    .filter((blob) => !blob.startsWith("0x"))
+    .map((blob) => Buffer.from(blob, "base64").toString("utf8"))
+    .join(" ");
+}
+
+function asksForSecret(prompt: string): boolean {
+  return (
+    SECRET_REQUEST.test(prompt) || SECRET_REQUEST.test(decodedBlobs(prompt))
+  );
 }
 
 // Deterministic demo parser. Returns null when the prompt is not a single wrap or transfer.
@@ -236,7 +283,8 @@ function haltingExecution(result: unknown) {
   return held || execution?.txHash ? execution : null;
 }
 
-async function runPlanner(prompt: string) {
+// Exported for the offline attack suite, which drives it with a compromised mock model.
+export async function runPlanner(prompt: string) {
   const provider = plannerProvider();
   const messages: unknown[] = [
     { role: "system", content: systemPrompt() },

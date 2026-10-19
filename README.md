@@ -92,6 +92,7 @@ The five dashboard scenarios, single wraps and transfers, portfolio reads and ad
 ```powershell
 pnpm dev                          # dashboard on http://127.0.0.1:3000
 pnpm test                         # Vitest
+pnpm attacks                      # offline red-team suite with per-category summary (chain mocked)
 pnpm typecheck
 pnpm build
 pnpm start                        # production server, loopback only
