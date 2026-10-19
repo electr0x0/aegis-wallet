@@ -11,6 +11,7 @@ export type GuardrailTrip = {
 
 type Step = {
   decision?: { tier?: string; reasons?: string[] };
+  error?: string;
   txHash?: string;
 } | null;
 
@@ -27,8 +28,15 @@ export function blockedTrip(result: unknown): GuardrailTrip | null {
   const all = steps(result);
   const blocked = all.find((step) => step?.decision?.tier === "BLOCKED");
   if (!blocked) return null;
+  const reason =
+    blocked.decision?.reasons?.[0] ?? "Blocked by deterministic policy";
+  // A failed simulation carries its cause separately, e.g. the balance shortfall.
+  const cause =
+    blocked.error && blocked.error !== "Blocked before RPC"
+      ? blocked.error
+      : "";
   return {
-    reason: blocked.decision?.reasons?.[0] ?? "Blocked by deterministic policy",
+    reason: cause ? `${reason}. ${cause}` : reason,
     earlierStepBroadcast: all.some((step) => Boolean(step?.txHash)),
   };
 }

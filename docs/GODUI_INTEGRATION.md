@@ -48,11 +48,12 @@ Future additions use `pnpm dlx shadcn@4.22.1 add @godui/<name>` or `pnpm dlx sha
 | Metric values and evidence count            | Lab Number Ticker                                                         |
 | Demo scenarios                              | Lab Prompt Suggestions                                                    |
 | Natural language input                      | Lab Prompt Composer                                                       |
-| Agent output and audit evidence             | Lab Agent Timeline / Agent Step                                           |
+| Agent chat (`/agent` and Intent studio)     | GodUI Conversation Thread / Conversation Message                          |
+| Audit evidence                              | Lab Agent Timeline / Agent Step                                           |
 
 Core files are in `src/components/ui`, Lab files in `src/components/godui`, and application compositions in `src/components/wallet`. Shared GodUI motion hooks are in `src/hooks`.
 
-Four wallet surfaces have no GodUI counterpart and are composed from the theme tokens and the components above: `security-banner.tsx` (guardrail-triggered alert), `guard-panel.tsx` (AgentGuard contract, session key, expiry and per-asset caps), `runway-tile.tsx` (reserve runway against the policy floor) and `ledger-badges.tsx` (sealed-ledger verification and per-entry seal).
+Five wallet surfaces have no GodUI counterpart and are composed from the theme tokens and the components above: `agent-reply.tsx` (turns each API result into a plain-language outcome, with the raw JSON behind "Technical details"), `security-banner.tsx` (guardrail-triggered alert), `guard-panel.tsx` (AgentGuard contract, session key, expiry and per-asset caps), `runway-tile.tsx` (reserve runway against the policy floor) and `ledger-badges.tsx` (sealed-ledger verification and per-entry seal).
 
 ## Theme and local adaptations
 

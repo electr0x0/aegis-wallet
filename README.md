@@ -55,6 +55,8 @@ pnpm setup-wallets
 
    Open http://127.0.0.1:3000. Restart the dev server after any change to `.env.local`.
 
+   The full-height agent chat is at http://127.0.0.1:3000/agent (sidebar → Agent chat). The dashboard's Intent studio shows the same conversation. Each reply states the outcome in plain words (done, waiting for approval, or blocked and why), and the raw API result sits behind "Technical details".
+
 No fake balances or transaction hashes are ever generated. An unfunded checkout shows no on-chain evidence.
 
 ## Environment variables

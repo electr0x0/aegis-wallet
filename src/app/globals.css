@@ -235,16 +235,6 @@
   gap: 24px;
   padding: 40px 0 28px;
 }
-.eyebrow {
-  color: var(--muted-foreground);
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.eyebrow > span {
-  color: var(--input);
-  padding: 0 6px;
-}
 .page-heading h1 {
   font-size: clamp(30px, 2.6vw, 42px);
   font-weight: 600;
@@ -395,14 +385,11 @@
 }
 
 /* ---------- Intent studio ---------- */
-.studio-content {
-  padding: 28px 24px 12px;
-}
 .studio-question {
   font-size: 26px;
   font-weight: 600;
   letter-spacing: -0.03em;
-  margin: 10px 0 6px;
+  margin: 0 0 6px;
   color: var(--ink);
 }
 .supporting-copy {
@@ -442,65 +429,6 @@
 .aegis-suggestions > button:last-child > span:nth-child(2) > span:first-child {
   color: var(--red);
 }
-.activity-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  border-top: 1px solid var(--border);
-  margin: 26px 0 20px;
-  padding-top: 20px;
-  color: var(--muted-foreground);
-  font: 500 11px var(--font-mono);
-  letter-spacing: 0.1em;
-}
-.empty-activity {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  margin-bottom: 12px;
-  border: 1px dashed var(--input);
-  border-radius: 12px;
-}
-.agent-mark {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  background: var(--emerald-tint);
-  border-radius: 10px;
-  color: var(--emerald);
-}
-.empty-activity p {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 3px;
-}
-.empty-activity span {
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--muted-foreground);
-}
-.activity-scroll {
-  max-height: 620px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--input) transparent;
-}
-.tool-result {
-  margin-top: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 12px;
-  max-height: 240px;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: #3d4642;
-  font: 11px/1.7 var(--font-mono);
-}
 .composer-region {
   padding: 4px 24px 22px;
 }
@@ -533,6 +461,241 @@
   border-radius: 5px;
   font-size: 11px;
   color: var(--muted-foreground);
+}
+
+/* ---------- Agent chat (dashboard panel and /agent) ---------- */
+.panel-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.panel-link:hover {
+  color: var(--emerald);
+}
+.agent-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.agent-thread {
+  padding: 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--input) transparent;
+}
+.intent-studio .agent-thread {
+  max-height: 680px;
+}
+/* Replies carry facts and approvals: let them use the full row, not GodUI's 80% bubble. */
+.agent-thread [data-role="assistant"] > div:last-child {
+  max-width: min(100%, 720px);
+}
+.chat-avatar {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: var(--ink);
+  color: #ffffff;
+}
+.chat-chips {
+  margin-bottom: 12px;
+}
+.chat-chips > button:last-child {
+  border-color: var(--red-line);
+  color: var(--red);
+}
+.agent-reply {
+  --tone: var(--slate);
+  border-left: 2px solid var(--tone);
+  padding: 2px 0 2px 12px;
+  white-space: normal;
+}
+.agent-reply[data-tone="success"] {
+  --tone: var(--emerald);
+}
+.agent-reply[data-tone="pending"] {
+  --tone: var(--amber);
+}
+.agent-reply[data-tone="error"] {
+  --tone: var(--red);
+}
+.agent-reply-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.agent-reply-title > .app-icon {
+  color: var(--tone);
+}
+.agent-reply-detail {
+  margin-top: 4px;
+  max-width: 68ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #3d4642;
+}
+.agent-reply-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px 20px;
+  margin-top: 12px;
+}
+.agent-reply-facts dt {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.agent-reply-facts dd {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.agent-reply-note {
+  margin-top: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.agent-reply-step {
+  margin-top: 14px;
+}
+.agent-reply-raw {
+  margin-top: 12px;
+}
+.agent-reply-raw summary {
+  width: fit-content;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.agent-reply-raw summary:hover {
+  color: var(--ink);
+}
+.agent-reply-raw pre {
+  margin-top: 8px;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #3d4642;
+  font: 11px/1.7 var(--font-mono);
+}
+
+/* Full-height chat route: the thread scrolls, the composer stays put. */
+.app-main[data-view="chat"] {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.chat-page {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  padding: 20px 0 24px;
+}
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.chat-panel .agent-chat,
+.chat-panel .agent-thread {
+  flex: 1;
+  min-height: 0;
+}
+.chat-panel .chat-empty {
+  width: 100%;
+  max-width: 760px;
+  margin: 4vh auto 0;
+}
+.chat-rail {
+  align-self: start;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+}
+.rail-section + .rail-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.rail-section h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.rail-section p {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+}
+.rail-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font: 500 11.5px var(--font-mono);
+  color: var(--emerald);
+}
+.rail-rows {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.rail-rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rail-rows dt {
+  color: var(--muted-foreground);
+}
+.rail-rows dd {
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.rail-section .rail-figure {
+  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.rail-figure small {
+  margin-left: 6px;
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted-foreground);
+}
+.rail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--emerald);
+}
+.rail-link:hover {
+  color: var(--emerald-strong);
 }
 
 /* ---------- Human approval (Tier 2) ---------- */
@@ -954,7 +1117,7 @@
   .dashboard-grid {
     gap: 24px;
   }
-  .studio-content,
+  .agent-thread,
   .telemetry-body {
     padding: 28px;
   }
@@ -983,6 +1146,12 @@
   }
   .setup-banner code,
   .wallet-status {
+    display: none;
+  }
+  .chat-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chat-rail {
     display: none;
   }
 }
@@ -1037,9 +1206,22 @@
   .aegis-suggestions {
     grid-template-columns: 1fr;
   }
-  .studio-content,
+  .agent-thread,
   .telemetry-body {
     padding: 22px 16px;
+  }
+  .chat-page {
+    padding: 12px 0 16px;
+  }
+  /* One swipeable row keeps the thread visible on phones. */
+  .chat-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .chat-chips > button {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .composer-region {
     padding: 4px 16px 18px;

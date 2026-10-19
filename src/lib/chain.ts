@@ -106,9 +106,12 @@ function ownerAccount() {
 
 // ---------------------------------------------------------------- calls
 
+export const tokenDecimals = (token: Action["token"]) =>
+  token === "USDC" ? 6 : 18;
+
 /** The raw inner call for an action, as if sent straight from the address holding the funds. */
 export function transaction(a: Action): Call {
-  const amount = parseUnits(a.amount, a.token === "USDC" ? 6 : 18);
+  const amount = parseUnits(a.amount, tokenDecimals(a.token));
   if (amount <= 0n) throw new Error("Amount must be positive");
   if (a.kind === "wrap_eth") {
     return {
@@ -346,6 +349,13 @@ function tokenBalance(token: Hex, owner: Hex) {
     functionName: "balanceOf",
     args: [owner],
   });
+}
+
+/** Balance of the address holding the funds (guard or EOA), in base units. */
+export function holderBalance(token: Action["token"]): Promise<bigint> {
+  const holder = holderAddress();
+  if (token === "ETH") return publicClient.getBalance({ address: holder });
+  return tokenBalance(token === "USDC" ? USDC : WETH, holder);
 }
 
 export async function portfolio() {

@@ -1,3 +1,4 @@
+import { BaseError } from "viem";
 import { beforeEach, describe, it, expect, vi } from "vitest";
 import type { Ledger } from "../src/lib/store";
 import type { Policy, Action } from "../src/lib/security/policyEngine";
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   } as Policy,
   send: vi.fn(),
   simulate: vi.fn(),
+  balance: vi.fn(),
 }));
 vi.mock("../src/lib/chain", () => ({
   WETH: "0x4200000000000000000000000000000000000006",
@@ -24,6 +26,8 @@ vi.mock("../src/lib/chain", () => ({
     value: 0n,
   }),
   holderAddress: () => "0x1111111111111111111111111111111111111111",
+  holderBalance: mocks.balance,
+  tokenDecimals: (token: string) => (token === "USDC" ? 6 : 18),
   guardAddress: () => null,
   outerCall: (call: unknown) => call,
   decodeGuardError: () => null,
@@ -65,6 +69,7 @@ beforeEach(() => {
   mocks.p.requireApproval = false;
   mocks.send.mockReset().mockResolvedValue("0x" + "a".repeat(64));
   mocks.simulate.mockReset().mockResolvedValue(21000n);
+  mocks.balance.mockReset().mockResolvedValue(10n ** 30n);
 });
 describe("Serialized execution and approval", () => {
   it("prevents concurrent writes from exceeding the autonomous budget", async () => {
@@ -97,6 +102,38 @@ describe("Serialized execution and approval", () => {
     await decide(mocks.state.pending[0].id, true);
     expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.state.pending[0].status).toBe("BLOCKED");
+  });
+  it("records an insufficient balance as one readable sentence", async () => {
+    mocks.simulate.mockRejectedValue(
+      new Error(
+        "Transaction creation failed.\n\nURL: https://sepolia.base.org",
+      ),
+    );
+    mocks.balance.mockResolvedValue(800_000_000_000_000n);
+    const result = await executeAction({
+      ...action,
+      kind: "wrap_eth",
+      token: "ETH",
+      amount: "0.001",
+      prompt: "Wrap 0.001 ETH into WETH",
+    });
+    const reason =
+      "Insufficient ETH: the wallet holds 0.0008 ETH, this needs 0.001 ETH.";
+    expect(result.decision.tier).toBe("BLOCKED");
+    expect(result.error).toBe(reason);
+    expect(mocks.state.logs.at(-1)?.simulation).toBe(reason);
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("keeps a failed simulation blocked when viem gives no message", async () => {
+    const bare = Object.assign(new BaseError("wrapped"), {
+      shortMessage: undefined,
+      details: "",
+    });
+    mocks.simulate.mockRejectedValue(bare);
+    const result = await executeAction(action);
+    expect(result.decision.tier).toBe("BLOCKED");
+    expect(result.error).not.toBe("");
+    expect(mocks.send).not.toHaveBeenCalled();
   });
   it("dry runs never sign or enqueue approvals", async () => {
     await executeAction({ ...action, amount: "5" }, true);

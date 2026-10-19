@@ -41,7 +41,11 @@ export type Snapshot = {
 export type AgentMessage = {
   id: string;
   intent: string;
-  result: string;
+  time: number;
+  /** Raw API result, kept for the collapsed technical details. */
+  result?: unknown;
+  /** Set instead of `result` when the request was refused or failed. */
+  error?: string;
   status: "success" | "error" | "pending";
 };
 export const shortAddress = (address: string) =>

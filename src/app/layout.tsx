@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { AppShell } from "@/components/wallet/app-shell";
+import { WalletProvider } from "@/components/wallet/wallet-provider";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "AegisWallet · Agent Control",
@@ -14,7 +16,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <WalletProvider>
+          <AppShell>{children}</AppShell>
+        </WalletProvider>
+      </body>
     </html>
   );
 }

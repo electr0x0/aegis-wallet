@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Sidebar,
   SidebarContent,
@@ -14,16 +16,36 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Wallet, SlidersHorizontal, FileText, ShieldCheck } from "./icons";
+import {
+  Wallet,
+  SlidersHorizontal,
+  FileText,
+  MessageSquare,
+  ShieldCheck,
+} from "./icons";
+import { useWallet } from "./wallet-provider";
 
-export function AppSidebar({
-  active,
-  onNavigate,
-}: {
-  active: string;
-  onNavigate: (view: string) => void;
-}) {
+const DASHBOARD_VIEWS = [
+  { id: "portfolio", label: "Portfolio", Icon: Wallet },
+  { id: "policy", label: "Guardrails", Icon: SlidersHorizontal },
+  { id: "evidence", label: "Evidence", Icon: FileText },
+];
+
+export function AppSidebar() {
   const { isMobile, setOpenMobile } = useSidebar();
+  const { tab, setTab } = useWallet();
+  const pathname = usePathname();
+  const router = useRouter();
+  const close = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+  const openView = (id: string) => {
+    setTab(id);
+    close();
+    if (pathname !== "/") router.push("/#telemetry");
+    else
+      document.getElementById("telemetry")?.scrollIntoView({ block: "start" });
+  };
   return (
     <Sidebar collapsible="icon" aria-label="Workspace navigation">
       <SidebarHeader className="h-16 justify-center border-b border-sidebar-border">
@@ -35,14 +57,14 @@ export function AppSidebar({
               tooltip="AegisWallet home"
               className="hover:bg-transparent"
             >
-              <a href="/">
+              <Link href="/" onClick={close}>
                 <span className="brand-mark">
                   <ShieldCheck size={17} />
                 </span>
                 <span className="sidebar-brand">
                   aegis<span>wallet</span>
                 </span>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -52,19 +74,24 @@ export function AppSidebar({
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {[
-                { id: "portfolio", label: "Portfolio", Icon: Wallet },
-                { id: "policy", label: "Guardrails", Icon: SlidersHorizontal },
-                { id: "evidence", label: "Evidence", Icon: FileText },
-              ].map(({ id, label, Icon }) => (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/agent"}
+                  tooltip="Agent chat"
+                >
+                  <Link href="/agent" onClick={close}>
+                    <MessageSquare size={20} />
+                    <span>Agent chat</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {DASHBOARD_VIEWS.map(({ id, label, Icon }) => (
                 <SidebarMenuItem key={id}>
                   <SidebarMenuButton
-                    isActive={active === id}
+                    isActive={pathname === "/" && tab === id}
                     tooltip={label}
-                    onClick={() => {
-                      onNavigate(id);
-                      if (isMobile) setOpenMobile(false);
-                    }}
+                    onClick={() => openView(id)}
                   >
                     <Icon size={20} />
                     <span>{label}</span>

@@ -21,6 +21,8 @@ import { InfoCircledIcon } from "@svg-animated-icons/react/info-circled";
 import { PanelLeftIcon } from "@svg-animated-icons/react/panel-left";
 import { ExclamationTriangleIcon } from "@svg-animated-icons/react/exclamation-triangle";
 import { ClockIcon } from "@svg-animated-icons/react/clock";
+import { ChatBubbleIcon } from "@svg-animated-icons/react/chat-bubble";
+import { EnterFullScreenIcon } from "@svg-animated-icons/react/enter-full-screen";
 
 type IconProps = HTMLAttributes<HTMLSpanElement> & { size?: number };
 export type AppIcon = ComponentType<IconProps>;
@@ -67,3 +69,5 @@ export const Info = icon(InfoCircledIcon);
 export const PanelLeft = icon(PanelLeftIcon);
 export const AlertTriangle = icon(ExclamationTriangleIcon);
 export const Clock = icon(ClockIcon);
+export const MessageSquare = icon(ChatBubbleIcon);
+export const Expand = icon(EnterFullScreenIcon);

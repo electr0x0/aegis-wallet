@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { formatUnits, isAddress } from "viem";
+import { BaseError, formatUnits, isAddress, parseUnits } from "viem";
 import { z } from "zod";
 import {
   USDC,
@@ -8,6 +8,8 @@ import {
   decodeGuardError,
   guardAddress,
   holderAddress,
+  holderBalance,
+  tokenDecimals,
   outerCall,
   portfolio,
   publicClient,
@@ -114,6 +116,32 @@ async function simulate(a: Action) {
   };
 }
 
+// One readable line instead of viem's multi-line dump (URL, request body, call arguments).
+function briefError(e: unknown): string {
+  if (!(e instanceof BaseError)) return (e as Error).message;
+  // viem leaves shortMessage unset when it wraps a non-viem error.
+  const short = e.shortMessage || e.message;
+  const { details } = e;
+  if (!details || short.includes(details)) return short;
+  return `${short} ${details}`;
+}
+
+// The commonest pre-flight failure is a holder without enough funds: name the shortfall.
+async function simulationFailure(a: Action, e: unknown): Promise<string> {
+  try {
+    const decimals = tokenDecimals(a.token);
+    const held = await holderBalance(a.token);
+    if (held < parseUnits(a.amount, decimals)) {
+      const balance = formatUnits(held, decimals);
+      return `Insufficient ${a.token}: the wallet holds ${balance} ${a.token}, this needs ${a.amount} ${a.token}.`;
+    }
+  } catch {
+    // The balance read is best effort; fall back to the RPC's own reason.
+  }
+  // Never empty: the policy treats an empty error as a passed simulation.
+  return briefError(e) || "Pre-flight simulation failed";
+}
+
 async function holdingsUsd(a: Action, p: Policy) {
   if (a.kind !== "transfer_token" || !p.treasury) return undefined;
   return (await portfolio()).totalUsd;
@@ -129,7 +157,7 @@ async function guardRejection(a: Action, approval?: OwnerApproval) {
   } catch (e) {
     return (
       decodeGuardError(e) ??
-      `On-chain guard pre-flight failed: ${(e as Error).message}`
+      `On-chain guard pre-flight failed: ${briefError(e)}`
     );
   }
 }
@@ -186,7 +214,7 @@ async function inspect(
     ({ gasEstimate, gasGwei } = await simulate(a));
     holdings = await holdingsUsd(a, p);
   } catch (e) {
-    error = (e as Error).message;
+    error = await simulationFailure(a, e);
   }
 
   let decision = evaluateTransactionPolicy(a, p, {
@@ -239,7 +267,7 @@ async function broadcast(
       approval = await signOwnerApproval(transaction(a));
       rejection = await guardRejection(a, approval);
     } catch (e) {
-      rejection = `Owner approval failed: ${(e as Error).message}`;
+      rejection = `Owner approval failed: ${briefError(e)}`;
     }
     if (rejection) {
       proposal.status = "BLOCKED";
@@ -290,7 +318,7 @@ async function broadcast(
     if (proposal) proposal.status = entry.status;
     return record(l, entry, { ...check, txHash: hash, status: entry.status });
   } catch (e) {
-    entry.reasons = [...entry.reasons, (e as Error).message];
+    entry.reasons = [...entry.reasons, briefError(e)];
     log(l, entry);
     await saveLedger(l);
     throw new Error(
