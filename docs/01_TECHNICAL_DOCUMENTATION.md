@@ -480,3 +480,9 @@ Optional EAS checkpoint verification reads `getAttestation` at the fixed Base Se
 `judgeReadiness` derives status from returned public configuration and live data. It does not contact model providers or deploy/fund/renew anything. The downloaded judge report is a timestamped snapshot, not a certification or a signed security assessment.
 
 For exports without a deployment record, the verifier accepts an explicit expected public guard address (`--guard` in the CLI). This address is shown as user-supplied trust context; the contract owner is read on-chain. Normal direct EOA transactions are still checked as direct calls. A wrong guard cannot make an unrelated transaction match its recipient or guard route. This supports historical account exports without inventing a missing deployment event.
+
+### Invoice safety and reproducible checks
+
+Invoice payment routing refuses `NEGATED` text before contacting a model. A request containing `simulate` or `dry-run` passes `dryRun=true` into `executeAction`, so the decision is logged as `DRY_RUN` without a proposal or broadcast. The collaborator's invoice regression tests cover both cases. The same boundary applies alongside the what-if lab; unlike a lab comparison, an execution dry run is an auditable ledger event.
+
+The GitHub verification workflow uses Node 24 and the pinned pnpm package manager, installs the frozen dependency graph, then runs tests, TypeScript and a credential-free production build. Repository token permissions are read-only and checkout credentials are not persisted. It does not run operator scripts, call model providers or publish transaction evidence.

@@ -199,3 +199,9 @@ Select the current account export or import a JSON ledger/export, confirm the ex
 The documented EAS checkpoint and the local private ledger may belong to different operator runs. A mismatch is reported honestly; obtain the matching full ledger before citing anchored coverage. A fresh checkout has no private evidence and is never filled with synthetic history. See [the judge walkthrough](docs/JUDGE_WALKTHROUGH.md) for the revised demo order.
 
 Older exports may omit the guard deployment entry. Enter the expected public AgentGuard address in Judge proof, or pass `--guard 0x...` to `pnpm verify:evidence`, so the verifier can decode its routed payment and check the recipient. The guard owner is read from that contract on chain 84532. An absent or wrong guard address never silently turns an unverified route into a pass.
+
+### Continuous verification
+
+`.github/workflows/verify.yml` runs the offline test suite, TypeScript and production build on pushes to main and pull requests. It uses Node 24, the pnpm version declared in `packageManager`, a frozen lockfile, read-only repository permissions and commit-pinned actions. It receives no wallet keys, provider secrets or private ledger and never funds, deploys or broadcasts.
+
+Invoice instructions also honor explicit negation and simulation: “do not pay” is refused before model extraction, while “simulate paying this invoice” uses the normal dry-run gate and creates no approval proposal or transaction.
