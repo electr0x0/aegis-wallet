@@ -1,17 +1,28 @@
 # AegisWallet
 
-AegisWallet is an AI agent wallet on Base Sepolia. It treats the model as a financial participant working under a mandate, not as a key holder:
+AegisWallet is an AI agent wallet on Base Sepolia, built as risk-control infrastructure for AI agents that act on-chain. It combines a deterministic policy gate, an on-chain session-key guard that holds the funds, a cash-reserve runway rule and a sealed, signed ledger. It runs on testnet only and does no trading and no yield. It is an entry for the 2026 Shenzhen International FinTech Competition, International Track, Topic F "Agent Wallet".
+
+It treats the model as a financial participant working under a mandate, not as a key holder:
 
 - **Proposing.** A language model, or a deterministic parser when no model is configured, turns plain-English instructions into typed proposals.
 - **Deciding.** A deterministic policy engine decides whether each proposal runs autonomously, waits for a human, or is refused. Every write is simulated from the funded address before anything is signed.
 - **Holding.** The funds sit in AgentGuard, a small on-chain contract. The agent holds only an expiring session key, limited by per-asset caps, recipient and call allowlists, and owner-signed approvals. These limits hold even if the model, the agent logic or the session key is compromised.
 - **Recording.** Every decision goes into a hash-chained ledger signed by the agent key, with a rationale a person can read.
 
-Entry for the 2026 Shenzhen International FinTech Competition, International Track, Topic F "Agent Wallet".
+## For judges: verify in 3 minutes
 
-![AegisWallet operator dashboard](docs/screenshots/godui-dashboard.png)
+No step needs a private key or a funded wallet.
+
+1. **The guard.** Open the AgentGuard contract on BaseScan: [`0xe05aec8cd8cd122f0988ba835670f64171453a31`](https://sepolia.basescan.org/address/0xe05aec8cd8cd122f0988ba835670f64171453a31). It holds the master account's funds; the agent has only a session key.
+2. **A blocked attack and an approved payment.** Open [the reverted attack](https://sepolia.basescan.org/tx/0xaea1b30e3af54cfc5a7ff85ae1d687a16d94c7692990f8004b3f47e9a7ad6122) ([docs/06](docs/06_EXECUTION_EVIDENCE.md), row 4). The session key called the guard directly, skipping every off-chain check, and AgentGuard reverted it with `RecipientNotAllowed`. Then open [the Tier 2 payment](https://sepolia.basescan.org/tx/0x0f8d7803692337695608ca8fb853d6b329ade3e66c6d4eb32b6a7c85e381b2fd) (row 8). It went through `executeApproved`, which AgentGuard accepts only with a valid owner signature.
+3. **Run the tests.** `pnpm install --frozen-lockfile`, then `pnpm test`.
+4. **Run the attack suite.** `pnpm attacks` (added in this release).
+5. **Verify the evidence.** `pnpm verify:evidence` (added in this release). It needs the operator's ledger file (`data/audit_log.json`) or the exported `aegis-evidence.json`.
+6. **Read the security assessment.** In docs/05, read [the permission-tier implementation](docs/05_SECURITY_SELF_ASSESSMENT.md#2-permission-tier-implementation) and [the known-risk list](docs/05_SECURITY_SELF_ASSESSMENT.md#3-known-risk-list). [The regulatory mapping](docs/05_SECURITY_SELF_ASSESSMENT.md#7-regulatory-mapping) links each control to published guidance.
 
 ## How it works
+
+![AegisWallet operator dashboard](docs/screenshots/godui-dashboard.png)
 
 | Layer                                                 | Enforces                                                                                                                                                                                                                                                                                                      |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -113,8 +124,8 @@ The demo prompts and the recording script are in [docs/DEMO_SCRIPT.md](docs/DEMO
 | #   | Deliverable                                               | Location                                                                                                                                |
 | --- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | 01  | Technical documentation                                   | [docs/01_TECHNICAL_DOCUMENTATION.md](docs/01_TECHNICAL_DOCUMENTATION.md)                                                                |
-| 02  | Demo video (≤ 5 minutes)                                  | Recorded from [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md); submitted separately                                                          |
-| 03  | Presentation deck                                         | Outline and speaker notes in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md#5-10-slide-deck-outline); submitted separately                   |
+| 02  | Presentation deck (final presentation, ≤ 10 minutes)      | Outline and speaker notes in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md#5-10-slide-deck-outline); submitted separately                   |
+| 03  | Demo video (optional, ≤ 5 minutes)                        | Recorded from [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md); submitted separately                                                          |
 | 04  | Source code, tests and deployment steps                   | This repository: `src/`, `contracts/`, `scripts/`, `tests/`, this README                                                                |
 | 05  | Security self-assessment                                  | [docs/05_SECURITY_SELF_ASSESSMENT.md](docs/05_SECURITY_SELF_ASSESSMENT.md)                                                              |
 | 06  | Execution evidence (real Base Sepolia transaction hashes) | [docs/06_EXECUTION_EVIDENCE.md](docs/06_EXECUTION_EVIDENCE.md), and Dashboard → Evidence → Export, generated from `data/audit_log.json` |
