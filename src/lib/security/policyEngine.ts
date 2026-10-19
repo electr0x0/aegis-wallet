@@ -1,4 +1,38 @@
 // Pure, deterministic policy gate. No I/O: every input arrives as an argument.
+import { encodePacked, keccak256, zeroAddress } from "viem";
+
+// Ledger anchoring on the Ethereum Attestation Service: Base Sepolia (OP Stack) predeploys.
+export const EAS_ADDRESS = "0x4200000000000000000000000000000000000021";
+export const SCHEMA_REGISTRY_ADDRESS =
+  "0x4200000000000000000000000000000000000020";
+export const LEDGER_ANCHOR_SCHEMA =
+  "bytes32 ledgerHead,uint64 entryCount,bytes32 policyHash";
+export const ANCHOR_KINDS = [
+  "register_anchor_schema",
+  "anchor_ledger",
+] as const;
+export type AnchorKind = (typeof ANCHOR_KINDS)[number];
+
+/** SchemaRegistry UID: keccak256(abi.encodePacked(schema, resolver, revocable)). */
+export function schemaUid(
+  schema: string,
+  resolver: string,
+  revocable: boolean,
+) {
+  return keccak256(
+    encodePacked(
+      ["string", "address", "bool"],
+      [schema, resolver as `0x${string}`, revocable],
+    ),
+  );
+}
+
+// No resolver, not revocable.
+export const LEDGER_ANCHOR_SCHEMA_UID = schemaUid(
+  LEDGER_ANCHOR_SCHEMA,
+  zeroAddress,
+  false,
+);
 
 // Operator-entered fiat profile. Not a live bank feed.
 export type Treasury = {
@@ -17,13 +51,30 @@ export type Policy = {
   treasury?: Treasury;
 };
 
+export type LedgerAnchor = {
+  ledgerHead: string;
+  entryCount: number;
+  policyHash: string;
+};
+
 export type Action = {
-  kind: "read" | "wrap_eth" | "unwrap_weth" | "transfer_token" | "fund_account";
+  kind:
+    | "read"
+    | "wrap_eth"
+    | "unwrap_weth"
+    | "transfer_token"
+    | "fund_account"
+    | AnchorKind;
   token: "ETH" | "WETH" | "USDC";
   amount: string;
   recipient: string;
   prompt: string;
+  // Set by executeAction from the sealed ledger. Never parsed from input.
+  anchor?: LedgerAnchor;
 };
+
+// What an anchor call does, decoded from the exact calldata that will be signed.
+export type AnchorCall = { to: string; value: bigint; schemaUid?: string };
 
 export type Tier = "TIER_0" | "TIER_1_AUTO" | "TIER_2_HITL" | "BLOCKED";
 
@@ -41,6 +92,7 @@ export type PolicyContext = {
   simulation: boolean;
   holdingsUsd?: number;
   onboardingRecipient?: string;
+  anchorCall?: AnchorCall;
 };
 
 export const ADVERSARIAL =
@@ -57,6 +109,47 @@ function block(reason: string): Decision {
 // Truncated, never rounded up, so a breach can't display as "3.0 months (floor 3)".
 function months(value: number): string {
   return (Math.floor(value * 10) / 10).toFixed(1);
+}
+
+export function isAnchor(action: Pick<Action, "kind">): boolean {
+  return (ANCHOR_KINDS as readonly string[]).includes(action.kind);
+}
+
+const ANCHOR_TARGETS: Record<AnchorKind, string> = {
+  register_anchor_schema: SCHEMA_REGISTRY_ADDRESS,
+  anchor_ledger: EAS_ADDRESS,
+};
+
+// A fixed zero-value EAS call. Tier 1 or BLOCKED, never Tier 2: it cannot move funds.
+function anchorDecision(
+  action: Action,
+  policy: Policy,
+  context: PolicyContext,
+): Decision {
+  const call = context.anchorCall;
+  const target = ANCHOR_TARGETS[action.kind as AnchorKind];
+  if (!call) return block("Ledger anchor call missing");
+  if (action.amount !== "0" || call.value !== 0n) {
+    return block("Ledger anchor must carry zero value");
+  }
+  if (!listed([target], call.to) || !listed([target], action.recipient)) {
+    return block("Ledger anchor target is not the EAS predeploy");
+  }
+  if (call.schemaUid !== LEDGER_ANCHOR_SCHEMA_UID) {
+    return block("Ledger anchor schema is not the AegisWallet schema");
+  }
+  if (!context.simulation) return block("Pre-flight simulation failed");
+  if (
+    !Number.isFinite(context.gasGwei) ||
+    context.gasGwei > policy.maxGasGwei
+  ) {
+    return block("Gas exceeds configured ceiling");
+  }
+  return {
+    tier: "TIER_1_AUTO",
+    reasons: ["Zero-value ledger anchor with the fixed EAS schema"],
+    riskScore: 10,
+  };
 }
 
 // Months of expenses left after this outflow, or undefined when not computable.
@@ -99,6 +192,7 @@ export function evaluateTransactionPolicy(
   if (ADVERSARIAL.test(action.prompt) && !trusted) {
     return block("Adversarial instruction with unverified recipient");
   }
+  if (isAnchor(action)) return anchorDecision(action, policy, context);
   if (action.kind === "read") {
     return { tier: "TIER_0", reasons: ["Read-only operation"], riskScore: 0 };
   }
@@ -164,6 +258,14 @@ function summarize(action: Action, usd: number): string {
   if (action.kind === "read") return "read-only request";
   if (action.kind === "wrap_eth") return `wrap ${amount}${value}`;
   if (action.kind === "unwrap_weth") return `unwrap ${amount}${value}`;
+  if (action.kind === "register_anchor_schema") {
+    return "register the ledger anchor schema on EAS (zero value)";
+  }
+  if (action.kind === "anchor_ledger") {
+    const head = action.anchor?.ledgerHead;
+    const count = action.anchor?.entryCount;
+    return `anchor ledger head ${head} (${count} entries) on EAS (zero value)`;
+  }
   return `transfer ${amount} to ${action.recipient}${value}`;
 }
 
@@ -194,6 +296,9 @@ export function explainDecision(
   }
   if (decision.tier === "TIER_2_HITL") {
     return `${head} Held for human approval: ${reasons}.${simulation}${runway}`;
+  }
+  if (isAnchor(action)) {
+    return `${head} Fixed call; no funds can move.${simulation}`;
   }
   const cap = dollars(ctx.policy.tier1SingleTxMaxUsd);
   const used = dollars(ctx.spentUsd + ctx.usd);

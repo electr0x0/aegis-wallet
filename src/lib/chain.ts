@@ -5,6 +5,7 @@ import {
   createPublicClient,
   createWalletClient,
   decodeErrorResult,
+  decodeFunctionData,
   encodeAbiParameters,
   encodeFunctionData,
   formatEther,
@@ -16,15 +17,26 @@ import {
   keccak256,
   parseAbi,
   parseAbiParameters,
+  parseEventLogs,
   parseUnits,
   zeroAddress,
+  zeroHash,
   type Abi,
   type Hex,
+  type Log,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 import artifact from "./guard/AgentGuard.json";
-import type { Action } from "./security/policyEngine";
+import {
+  EAS_ADDRESS,
+  LEDGER_ANCHOR_SCHEMA,
+  LEDGER_ANCHOR_SCHEMA_UID,
+  SCHEMA_REGISTRY_ADDRESS,
+  schemaUid,
+  type Action,
+  type AnchorCall,
+} from "./security/policyEngine";
 import { currentAccount } from "./auth/context";
 
 export const WETH = "0x4200000000000000000000000000000000000006";
@@ -37,6 +49,16 @@ export const abi = parseAbi([
   "function withdraw(uint256)",
 ]);
 export const guardAbi = artifact.abi as Abi;
+// Subset of EAS v1.2.0 (eas-contracts IEAS.sol and ISchemaRegistry.sol), as deployed on Base Sepolia.
+export const easAbi = parseAbi([
+  "struct AttestationRequestData { address recipient; uint64 expirationTime; bool revocable; bytes32 refUID; bytes data; uint256 value; }",
+  "struct AttestationRequest { bytes32 schema; AttestationRequestData data; }",
+  "struct SchemaRecord { bytes32 uid; address resolver; bool revocable; string schema; }",
+  "function attest(AttestationRequest request) payable returns (bytes32)",
+  "event Attested(address indexed recipient, address indexed attester, bytes32 uid, bytes32 indexed schemaUID)",
+  "function register(string schema, address resolver, bool revocable) returns (bytes32)",
+  "function getSchema(bytes32 uid) view returns (SchemaRecord)",
+]);
 
 const REFERENCE_ETH_USD = 2500;
 const APPROVAL_TTL_SECONDS = 600n;
@@ -119,8 +141,93 @@ function ownerAccount() {
 export const tokenDecimals = (token: Action["token"]) =>
   token === "USDC" ? 6 : 18;
 
+// Fixed zero-value EAS calls. Target, value and schema never come from the action.
+function anchorTransaction(a: Action): Call {
+  if (a.kind === "register_anchor_schema") {
+    const data = encodeFunctionData({
+      abi: easAbi,
+      functionName: "register",
+      args: [LEDGER_ANCHOR_SCHEMA, zeroAddress, false],
+    });
+    return { to: SCHEMA_REGISTRY_ADDRESS, value: 0n, data };
+  }
+  if (!a.anchor) throw new Error("Ledger anchor data missing");
+  const payload = encodeAbiParameters(
+    parseAbiParameters(LEDGER_ANCHOR_SCHEMA),
+    [
+      a.anchor.ledgerHead as Hex,
+      BigInt(a.anchor.entryCount),
+      a.anchor.policyHash as Hex,
+    ],
+  );
+  const request = {
+    schema: LEDGER_ANCHOR_SCHEMA_UID,
+    data: {
+      recipient: zeroAddress,
+      expirationTime: 0n,
+      revocable: false,
+      refUID: zeroHash,
+      data: payload,
+      value: 0n,
+    },
+  };
+  const data = encodeFunctionData({
+    abi: easAbi,
+    functionName: "attest",
+    args: [request],
+  });
+  return { to: EAS_ADDRESS, value: 0n, data };
+}
+
+/** Decodes an EAS call for the policy: target, total value and the schema UID it uses. */
+export function anchorCall(call: Call): AnchorCall {
+  try {
+    const decoded = decodeFunctionData({
+      abi: easAbi,
+      data: call.data ?? "0x",
+    });
+    if (decoded.functionName === "attest") {
+      const { schema, data } = decoded.args[0];
+      const value = call.value + data.value;
+      return { to: call.to, value, schemaUid: schema };
+    }
+    if (decoded.functionName === "register") {
+      const uid = schemaUid(...decoded.args);
+      return { to: call.to, value: call.value, schemaUid: uid };
+    }
+  } catch {
+    // Not an EAS call: the policy blocks a missing schema.
+  }
+  return { to: call.to, value: call.value };
+}
+
+/** The attestation UID from our schema's Attested event in a mined receipt. */
+export function attestationUid(logs: Log[]): Hex | undefined {
+  const events = parseEventLogs({ abi: easAbi, eventName: "Attested", logs });
+  const ours = events.find(
+    (e) =>
+      isAddressEqual(e.address, EAS_ADDRESS) &&
+      e.args.schemaUID === LEDGER_ANCHOR_SCHEMA_UID,
+  );
+  return ours?.args.uid;
+}
+
+/** True when the fixed ledger anchor schema is already in the SchemaRegistry. */
+export async function anchorSchemaRegistered(): Promise<boolean> {
+  const record = await publicClient.readContract({
+    address: SCHEMA_REGISTRY_ADDRESS,
+    abi: easAbi,
+    functionName: "getSchema",
+    args: [LEDGER_ANCHOR_SCHEMA_UID],
+  });
+  return record.uid === LEDGER_ANCHOR_SCHEMA_UID;
+}
+
 /** The raw inner call for an action, as if sent straight from the address holding the funds. */
 export function transaction(a: Action): Call {
+  if (a.kind === "register_anchor_schema" || a.kind === "anchor_ledger") {
+    return anchorTransaction(a);
+  }
   const amount = parseUnits(a.amount, tokenDecimals(a.token));
   if (amount <= 0n) throw new Error("Amount must be positive");
   if (a.kind === "wrap_eth") {

@@ -12,7 +12,8 @@
     "godui:check": "node scripts/godui-mcp.mjs",
     "guard:compile": "node scripts/compile-guard.mjs",
     "guard:deploy": "tsx --env-file-if-exists=.env.local scripts/deploy-guard.ts",
-    "guard:attack": "tsx --env-file-if-exists=.env.local scripts/attack-demo.ts"
+    "guard:attack": "tsx --env-file-if-exists=.env.local scripts/attack-demo.ts",
+    "ledger:anchor": "tsx --env-file-if-exists=.env.local scripts/anchor-ledger.ts"
   },
   "dependencies": {
     "@svg-animated-icons/react": "^0.1.2",

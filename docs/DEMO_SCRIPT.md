@@ -109,7 +109,7 @@ Each Tier 1 or Tier 2 request waits for the receipt (timeout 60 s). Cut the wait
 | Why not ERC-4337? | Scope. AgentGuard enforces the same session-key idea without an EntryPoint, bundler or paymaster, and the session key pays its own gas. The production path is an ERC-4337 account with a session-key validator module |
 | What if your server is compromised? | The guard bounds a compromised model, agent logic or session key. The owner key is on the same server in this prototype, so a full server compromise is not bounded. That is documented as risk R2 |
 | Can the model invent an address or amount? | It can propose one. Arguments are schema-validated, every write passes the same policy and simulation, and anything not whitelisted or above the caps needs a human. On-chain, the session key can only pay allowlisted recipients |
-| Is the ledger tamper-proof? | Tamper-evident against anyone without the agent key: each entry is hash-chained and signed. The key holder could rewrite it, and there is no external anchor yet |
+| Is the ledger tamper-proof? | Tamper-evident against anyone without the agent key: each entry is hash-chained and signed. The key holder could rewrite it; `pnpm ledger:anchor` attests the head on EAS, so history up to the last anchor is fixed on-chain |
 | Where do the fiat numbers come from? | An operator-entered treasury profile in `data/policy.json`, not a live bank feed |
 | What if a transaction hangs? | The hash is persisted before waiting, the spend stays reserved, and nothing is retried automatically. The operator reconciles manually |
 
