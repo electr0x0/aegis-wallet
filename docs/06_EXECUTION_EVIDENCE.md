@@ -52,7 +52,7 @@ The AgentGuard source is publicly verified: `contracts/AgentGuard.sol`, compiled
 
 ```powershell
 pnpm guard:verify --address 0xe05aec8cd8cd122f0988ba835670f64171453a31
-pnpm verify:evidence data/audit_log.json
+pnpm verify:evidence data/audit_log.json --signer 0xE1f4D11f3170Bd994379eA5f7443d826BC3ABd9F
 ```
 
 `guard:verify` recompiles the contract and compares it with `eth_getCode`, with the `owner` immutable masked. It then submits the standard JSON input to Sourcify and Blockscout.
