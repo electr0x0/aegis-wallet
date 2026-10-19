@@ -25,6 +25,7 @@ Real transactions on Base Sepolia (chain 84532), produced by this codebase on 19
 | 6 | Tier 1 autonomous wrap of 0.0002 ETH | Policy → simulation → guard `execute` | Confirmed | [0xbcf125…87c0](https://sepolia.basescan.org/tx/0xbcf125bb8ba3cb1c4c18500e3ece6a144a035fb3110ec2cb596ca8ac1da787c0) |
 | 7 | Tier 1 from a natural-language intent: "Wrap 0.001 ETH into WETH" | Dashboard API → policy → guard | Confirmed | [0x760cab…9bbd](https://sepolia.basescan.org/tx/0x760cabc0001436be12ef8e0136e071e1847a8df50b2493e4fff47fc89d8e9bbd) |
 | 8 | Tier 2 human-in-the-loop: "Send 2 USDC to 0x71c7… for an investment". Held because the recipient is not whitelisted. Approved by the operator and executed with an owner EIP-191 signature that AgentGuard verified on-chain (`executeApproved`). | Proposal → approval → owner signature | Confirmed | [0x0f8d78…b2fd](https://sepolia.basescan.org/tx/0x0f8d7803692337695608ca8fb853d6b329ade3e66c6d4eb32b6a7c85e381b2fd) |
+| 9 | Tier 1 autonomous ETH transfer, 19 October 2026: "Send 0.0001 ETH to the savings vault", which gives the owner key gas for the emergency-stop recovery. Rationale: `TIER_1_AUTO: transfer 0.0001 ETH … (~$0.25). Within $20 single-transaction cap; $3.75 of $50 rolling 24h autonomous budget used. Pre-flight simulation passed. Reserve runway 3.0 months (floor 3).` | Dashboard API → policy → guard `execute` | Confirmed | [0xc3c704…4241](https://sepolia.basescan.org/tx/0xc3c7048a7119dcf43f6c580f8d90808d0f99bec3df731fb89c3c5c566c234241) |
 
 ## Refusals that never reached the chain
 
@@ -38,7 +39,7 @@ These are recorded in the sealed ledger. They have no transaction hash because n
 
 ## Ledger integrity at capture time
 
-`verifyLedger` returned `{ valid: true, entries: 19, sealed: 19 }`. Every entry is hash-chained to the previous one and signed with EIP-191 by the agent key.
+`verifyLedger` returned `{ valid: true, entries: 19, sealed: 19 }`. A later independent check, `pnpm verify:evidence data/audit_log.json --signer 0xE1f4D11f3170Bd994379eA5f7443d826BC3ABd9F` on 19 October 2026 after row 9, printed `28 entries, chain intact, 28 signatures valid, 9/9 receipts match`. Every entry is hash-chained to the previous one and signed with EIP-191 by the agent key.
 
 The ledger records each status change as its own entry: `BROADCASTING`, then `SUBMITTED`, then `CONFIRMED`. That is why a single hash appears in more than one entry.
 
