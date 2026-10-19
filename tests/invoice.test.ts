@@ -465,6 +465,27 @@ describe("Paying an invoice end to end", () => {
     );
     expect(mocks.state.logs).toHaveLength(0);
   });
+
+  it("never pays an invoice the operator says not to pay", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await expect(
+      pay(`Do not pay this invoice yet.\n${GENUINE}`),
+    ).rejects.toThrow(/^Not paid: the text says not to pay/);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.state.logs).toHaveLength(0);
+    expect(mocks.state.pending).toHaveLength(0);
+  });
+
+  it("only simulates when asked to simulate paying an invoice", async () => {
+    const result = (await pay(
+      `Simulate paying this invoice.\n${GENUINE}`,
+    )) as Record<string, any>;
+    expect(result.decision.tier).toBe("TIER_2_HITL");
+    expect(mocks.state.pending).toHaveLength(0);
+    expect(mocks.state.logs.at(-1)?.status).toBe("DRY_RUN");
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
 });
 
 describe("Planner provider fallback", () => {
