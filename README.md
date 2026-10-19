@@ -99,7 +99,8 @@ pnpm start                        # production server, loopback only
 pnpm guard:compile                # rebuild the AgentGuard ABI and bytecode
 pnpm guard:deploy                 # deploy and fund (--eth, --usdc), or:
 pnpm guard:deploy --fund-only     #   top up an existing guard
-pnpm guard:deploy --renew         #   extend the session with an owner-signed setSession
+pnpm guard:deploy --renew         #   extend the session; after a revoke the owner sends setSession itself
+pnpm guard:deploy --revoke        #   emergency stop: revoke the session key on-chain
 pnpm guard:deploy --force         #   redeploy (old guard funds need an owner-signed call to recover)
 
 pnpm guard:attack                 # compromised session key against AgentGuard: three simulated attacks

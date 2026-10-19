@@ -26,7 +26,7 @@ The planner, the tool executor and the policy gate are separate code paths in on
 | `src/lib/chain.ts`                 | viem clients, token constants, call encoding, guard call wrapping, owner-approval signing, guard error decoding, portfolio reads |
 | `src/lib/store.ts`                 | Atomic JSON persistence, process-wide mutex, ledger sealing and verification                                                     |
 | `contracts/AgentGuard.sol`         | On-chain session-key guard                                                                                                       |
-| `scripts/`                         | Wallet setup, guard compile, deploy and renew, compromised-key attack demo                                                       |
+| `scripts/`                         | Wallet setup, guard compile, deploy, renew and emergency stop, compromised-key attack demo                                       |
 | `data/policy.json`                 | Committed default policy. `data/audit_log.json` (the ledger) is private and git-ignored                                          |
 
 ## 2. Architecture
@@ -364,9 +364,10 @@ pnpm dev               # http://127.0.0.1:3000
   Options:
   - `--fund-only` tops up an existing guard.
   - `--renew` extends the session through an owner-signed `setSession` relayed by the session key.
+  - `--revoke` is the emergency stop: the owner calls `revokeSession`, which zeroes the session key, so every later `execute` or `executeApproved` reverts with `NotSessionKey`. The owner EOA sends it when it holds gas; otherwise the session key relays it, owner-signed. After a revoke nothing can be relayed, so `--renew` detects the zero session key and has the owner send `setSession` itself, paying its own gas. Both steps simulate first, refuse on a failed simulation or a key with no gas (naming the address and the ETH it needs), and record a `SETUP` entry.
   - `--force` redeploys; funds in the old guard then need an owner-signed call to recover.
 
-  This is an operator step, so it signs with the agent key directly rather than through `executeAction`.
+  This is an operator step, so it signs with the agent key directly rather than through `executeAction`. `--revoke`, and `--renew` after a revoke, may sign with the owner key instead.
 
 - **Restart** `pnpm dev` after changing `.env.local`.
 

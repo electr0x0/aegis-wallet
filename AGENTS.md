@@ -23,7 +23,8 @@ pnpm setup-wallets              # creates .env.local; once funded, seeds two rea
 pnpm guard:compile              # solc 0.8.37: contracts/AgentGuard.sol -> src/lib/guard/AgentGuard.json
 pnpm guard:deploy               # deploy AgentGuard, write GUARD_ADDRESS, move --eth (default 0.002) and all agent USDC in
 pnpm guard:deploy --fund-only   # top up an existing guard (--eth, --usdc)
-pnpm guard:deploy --renew       # owner-signed setSession, relayed by the session key
+pnpm guard:deploy --renew       # owner-signed setSession, relayed by the session key; after a revoke the owner sends it
+pnpm guard:deploy --revoke      # emergency stop: owner revokes the session key on-chain
 pnpm guard:attack               # compromised session key vs AgentGuard, simulation only
 pnpm guard:attack --broadcast   # also send attack (a): a real reverted tx for evidence
 pnpm dev                        # http://127.0.0.1:3000
@@ -49,7 +50,8 @@ pnpm only. Never create `package-lock.json` or `yarn.lock`.
 | `contracts/AgentGuard.sol` | On-chain session-key guard (Layer 3). Not ERC-4337. |
 | `src/lib/guard/AgentGuard.json` | Generated ABI and bytecode. Output of `pnpm guard:compile`; never hand-edit. |
 | `scripts/setup-wallets.ts` | Key generation and the two evidence txs, via `executeAction`. |
-| `scripts/deploy-guard.ts`, `scripts/attack-demo.ts` | Operator scripts: guard deploy, fund and renew; compromised-key attack demo. See rule 11. |
+| `scripts/deploy-guard.ts`, `scripts/attack-demo.ts` | Operator scripts: guard deploy, fund, renew and emergency stop; compromised-key attack demo. See rule 11. |
+| `scripts/guard-session.ts` | Revoke and renew path choice (owner-sent or relayed by the session key), simulation and funding messages. Never sends; `deploy-guard.ts` does. |
 | `scripts/compile-guard.mjs` | Pinned-solc compile of the guard. |
 | `src/components/godui/`, `src/components/ui/` | GodUI and shadcn source. See `docs/GODUI_INTEGRATION.md`. |
 | `src/components/wallet/` | Dashboard: intent studio (demo prompts), approval card, guard panel, runway tile, evidence. |
@@ -73,7 +75,7 @@ Breaking one of these is a bug, whatever the diff looks like.
 9. **Money in base units.** New value math uses `bigint` via viem `parseUnits` and `formatUnits`; format only for display. Floating-point USD valuation is a documented known risk and should not spread.
 10. **Docs stay true.** If behaviour changes, update `docs/01_*`, `docs/05_*` and the README in the same commit. Judges read the docs before the code.
 11. **Only two scripts sign outside `executeAction`.**
-    - `scripts/deploy-guard.ts` does operator setup: deploy, fund, owner-signed renew.
+    - `scripts/deploy-guard.ts` does operator setup: deploy, fund, owner-signed renew, and the emergency stop (`--revoke`). The revoke, and a renew after it, may be sent by the owner key itself; `scripts/guard-session.ts` picks the path.
     - `scripts/attack-demo.ts` bypasses Layer 1 on purpose to prove Layer 3.
     - Both record every broadcast in the ledger. Nothing else may sign directly.
     - Like `setup-wallets`, they run as a separate process, so they are a second ledger writer. Run scripts only while the dashboard is idle.
