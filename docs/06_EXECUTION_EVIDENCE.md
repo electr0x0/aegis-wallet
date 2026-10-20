@@ -2,16 +2,18 @@
 
 Real transactions on Base Sepolia (chain 84532), produced by this codebase on 19 October 2026 (rows 10–13: 19–20 October 2026). Every hash below can be checked on BaseScan. The same records, with their deterministic rationale, policy hash, hash-chain link and agent signature, are in `data/audit_log.json`. Export them from the dashboard as JSON or Markdown.
 
+**Scope:** this page records the historical operator run, not the private history of a fresh checkout. The [submission folder](https://drive.google.com/drive/folders/1Cw41nMcZb73bek-7lEANnuIzOpuMheBS?usp=sharing) also contains a separate master-account export: **88 entries, 88 valid signatures, 8/8 unique receipts and four account-filter gaps**, with its matching verification report. That export does not reproduce this page's 47-entry/15-receipt result or prove the documented EAS prefix. See [the judge walkthrough](JUDGE_WALKTHROUGH.md#verify-the-submitted-export) for the exact download/verification command. No private ledger is included in Git.
+
 **AgentGuard contract:** [`0xe05aec8cd8cd122f0988ba835670f64171453a31`](https://sepolia.basescan.org/address/0xe05aec8cd8cd122f0988ba835670f64171453a31)
 
-| Detail            | Value                                                           |
-| ----------------- | --------------------------------------------------------------- |
-| Owner             | `0xf0841Df896811a10E31ae27506FD1A074eC605Ef` (vault key)        |
-| Session key       | `0xE1f4D11f3170Bd994379eA5f7443d826BC3ABd9F` (agent)            |
-| Session expiry    | 2026-11-02 17:58 UTC (renewed after the emergency stop, row 13) |
-| On-chain caps     | ETH 0.01 per tx / 0.02 per day; WETH 0.01 / 0.02; USDC 20 / 50  |
-| Allowed targets   | WETH, USDC                                                      |
-| Allowed recipient | the vault                                                       |
+| Detail            | Value                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Owner             | `0xf0841Df896811a10E31ae27506FD1A074eC605Ef` (vault key)                                                               |
+| Session key       | `0xE1f4D11f3170Bd994379eA5f7443d826BC3ABd9F` (agent)                                                                   |
+| Session expiry    | Recorded: 2026-11-02 17:58 UTC (renewed after the emergency stop, row 13); read current contract state before live use |
+| On-chain caps     | ETH 0.01 per tx / 0.02 per day; WETH 0.01 / 0.02; USDC 20 / 50                                                         |
+| Allowed targets   | WETH, USDC                                                                                                             |
+| Allowed recipient | the vault                                                                                                              |
 
 ## Transactions
 

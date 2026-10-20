@@ -1,0 +1,12 @@
+# Keep fresh Windows and Unix checkouts consistent for formatting and verification.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.pptx binary
+*.mp4 binary
+*.woff2 binary

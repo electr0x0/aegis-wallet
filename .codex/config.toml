@@ -1,6 +1,0 @@
-# Workspace-only GodUI catalog server. Package version is pinned by GodUI.
-[mcp_servers.godui]
-command = "pnpm"
-args = ["dlx", "@godui/mcp@0.1.0"]
-startup_timeout_sec = 60
-tool_timeout_sec = 60

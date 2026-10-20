@@ -2,9 +2,62 @@
 
 Local environment: Node v26.7.0, pnpm 11.25.0, Next.js 15.5.28. The committed CI targets Node 24. No new transaction, funding, deployment or approval was signed during these checks.
 
-## Automated checks
+## Final submission source review
 
-Actual output from the final combined test run, including the collaborator's invoice fixes:
+The final repository review used a separate copy containing only public source files and the committed default policy. No `.env.local`, account storage, audit ledger, local agent instructions, MCP configuration or submission binaries were copied. The collaborator's documentation reorganization in `67dc916` was retained; it changes no application source.
+
+Actual output from `pnpm test` in the main checkout:
+
+```text
+ Test Files  22 passed (22)
+      Tests  357 passed (357)
+   Start at  21:26:46
+   Duration  9.69s (import 70%, environment 15%, tests 13%, transform 1%)
+```
+
+The isolated source copy passed a frozen offline install using the local package cache, and a TypeScript check before any generated build files existed:
+
+```text
+Lockfile is up to date, resolution step is skipped
+Packages: +341
+Done in 9.8s using pnpm v11.25.0
+$ tsc --noEmit
+```
+
+The isolated production build ran before wallet setup, with wallet/model credentials removed from the process environment and no `.env.local`:
+
+```text
+$ next build
+   ▲ Next.js 15.5.28
+ ✓ Compiled successfully in 18.7s
+   Linting and checking validity of types ...
+   Collecting page data ...
+ ✓ Generating static pages (6/6)
+   Finalizing page optimization ...
+   Collecting build traces ...
+```
+
+The documented fresh-wallet setup then created new throwaway keys, printed only their public addresses and reported funding required. No funding or broadcast occurred. An isolated production server on loopback port 3339 returned HTTP 200 for the dashboard and `/api/agent`; the latter returned actual ETH, WETH and USDC balances of `0`. The test server was stopped afterward. These are HTTP/API smoke checks, not a new visual browser review or an on-chain payment demonstration.
+
+Independent verification of the unchanged submitted account JSON, using the published expected signer and guard, returned:
+
+```text
+88 entries, chain intact within the export, 4 gaps, 88 signatures valid, 8/8 receipts match
+```
+
+`--offline` also passed its seal checks and explicitly reported receipts not checked. No EAS checkpoint was selected for this account export. These results do not replace the separate historical 47-entry/15-receipt run in Deliverable 06.
+
+The production dependency audit returned:
+
+```text
+No known vulnerabilities found
+```
+
+Repository review also checked relative documentation links/anchors, ignored private/submission paths, local-only file preservation, credential-literal candidates outside synthetic test fixtures, formatting and Git whitespace. Local instructions and design-system configuration remain available on disk but are removed from the published tree. UI source and tests remain included. No runtime code, contract artifact, lockfile or operator policy was changed by this documentation polish.
+
+## Earlier automated checks
+
+Actual output from an earlier combined test run, before the final 357-test snapshot above:
 
 ```text
 $ vitest run "--silent"
@@ -39,7 +92,7 @@ Route (app)                                 Size  First Load JS
 └ ○ /icon.svg                                0 B            0 B
 ```
 
-`pnpm godui:check` completed with exit code 0 and registered `list_components`, `search_components` and `get_component`. The MCP was queried for the components used by the new compositions. Prettier reported:
+Prettier reported:
 
 ```text
 Checking formatting...
@@ -70,8 +123,8 @@ The eight existing transactions checked by the verifier are linked here so the r
 
 EAS coverage is tested with clearly marked synthetic fixtures for matching prefixes, tail deletion, unanchored suffixes, wrong schema/attester, expiration, revocation, filtered exports and unavailable reads. No matching live full-ledger checkpoint is claimed for this local run. The final overall verifier result requires every selected check, including any selected checkpoint, to pass.
 
-## Remaining submission work
+## Submission handoff
 
-Use `docs/JUDGE_WALKTHROUGH.md` for the live sequence. The actual presentation deck and optional recorded video remain separate artifacts. A winning score is not guaranteed by a test count or feature list. Production limitations, including co-located owner keys, fixed pricing, legacy floating-point gate valuation and process-local storage, remain documented in the security assessment.
+Use [the judge walkthrough](JUDGE_WALKTHROUGH.md) for the review sequence and [the submission folder](https://drive.google.com/drive/folders/1Cw41nMcZb73bek-7lEANnuIzOpuMheBS?usp=sharing) for the presentation, recorded product video, PDFs and evidence. Production limitations, including co-located owner keys, fixed pricing, legacy floating-point gate valuation and process-local storage, remain documented in the security assessment.
 
 ![Production Judge proof workspace](screenshots/judge-proof.png)

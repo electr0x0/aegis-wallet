@@ -9,7 +9,20 @@ data/*.tmp
 !data/policy.json
 *.tsbuildinfo
 /package-lock.json
+/yarn.lock
+
+# Submission artifacts are distributed through the linked Drive folder.
+/deliverables/
+/AegisWallet Pitch Deck.pptx
 
 # Local project instructions (not published).
 /INIT_INSTRUCTIONS.md
 /GODUI.md
+/AGENTS.md
+/CLAUDE.md
+/docs/GODUI_INTEGRATION.md
+/docs/screenshots/godui-dashboard.png
+
+# Local coding-agent / MCP configuration (not needed to run the app).
+/.codex/
+/.mcp.json

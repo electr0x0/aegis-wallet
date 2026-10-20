@@ -233,7 +233,7 @@ The one-time eligibility is consumed before the balance check, so a failed drip 
 
 **Concurrency.** A promise-chain mutex stored on `globalThis` (`exclusive()`) serialises every ledger, policy and account write, and survives development hot reloads. Reads run outside it, which the atomic rename makes safe. Sessions and treasury quotes are held in memory. This design is correct for exactly one Node process; horizontal scaling would need a transactional database and distributed nonce management.
 
-The operator console (GodUI) has four views: Command Center, Portfolio & Runway, Guardrails & Policy and Execution Evidence, with Intent Studio alongside. Evidence filters change only what is displayed; Export always contains the selected account's full history.
+The operator console has six views: Command Center, Portfolio & Runway, Treasury mandates, Guardrails & Policy, Execution Evidence and Judge proof, with Intent Studio alongside. Evidence filters change only what is displayed; Export always contains the selected account's full history. All interface components are included in the source; an external design-system service or MCP connection is not required to run the application.
 
 ## 7. External integrations
 
@@ -548,7 +548,7 @@ An operator step attests the ledger head on the Ethereum Attestation Service, so
 
 - **Offline checks.** Every entry must be sealed and signed; the hash must recompute; the signature must recover to the expected signer. The dashboard requires that signer to be stated; the CLI takes it from `--signer`, and without it infers it from the file, which proves only self-consistency. Empty evidence fails.
 - **Online checks.** For each transaction hash: chain ID 84532; receipt status equal to the ledger's `CONFIRMED`, `REVERTED` or `REVERTED_BY_GUARD`; sender equal to the ledger signer, or for an owner-sent setup step, the guard's on-chain `owner`; recorded guard address and recipient; and that the deploy transaction created the recorded guard. A `--guard` address overrides the guard recorded in the file.
-- **Filtered exports.** An account export omits other accounts' entries, so a `prevHash` that does not match is reported as a gap, not a failure. A filtered export cannot prove that nothing was deleted; the full ledger can.
+- **Filtered exports.** An account export omits other accounts' entries, so a `prevHash` that does not match is reported as a gap, not a failure. A filtered export cannot prove complete history. A full ledger permits strict internal-link checks, but seals alone cannot detect deletion of an unanchored tail. A trusted matching EAS checkpoint establishes coverage only for its selected prefix.
 - **EAS checkpoint (dashboard).** For a selected attestation UID, it checks the schema, the attester (the expected signer), that it is not revocable, revoked or expired, and that the full ledger's entry at the attested count has the attested head. A shorter ledger fails; a longer one reports the unanchored suffix.
 - **Bounds.** Dashboard input is at most 2,000,000 characters, 1,000 entries and 50 distinct online hashes. Imported content is not saved, and result rows omit prompts.
 
@@ -741,18 +741,25 @@ The prototype is testnet-only, single-process and single-operator. The known-ris
 
 ## 24. Deployment
 
-Prerequisites: Node.js 22 or 24 (the scripts need 22.9 or later for `--env-file-if-exists`; the test toolchain declares 22.22.2+ or 24.15+; developed and CI-tested on Node 24) and pnpm 11.25.0, pinned in `packageManager`. `pnpm-lock.yaml` is the only lockfile.
+For a fresh judge installation, use [Setup and troubleshooting](SETUP.md). The recommended runtime is Node.js **24.15 or newer within the 24.x release line**, with pnpm **11.25.0** pinned in `packageManager`. CI targets Node 24. The test toolchain also declares support for Node 22.22.2+, but Node 24 is the documented review path. `pnpm-lock.yaml` is the only lockfile. No browser wallet, model credential or testnet funding is required to start the console.
 
 ```powershell
 pnpm install --frozen-lockfile
-pnpm setup-wallets     # creates .env.local (agent key, vault key and address) without printing keys
-# Fund the printed agent address with Base Sepolia ETH and USDC.
-pnpm setup-wallets     # optional: once funded, runs two small evidence transactions
-pnpm guard:compile     # rebuilds src/lib/guard/AgentGuard.json from contracts/AgentGuard.sol
-pnpm guard:deploy      # deploys AgentGuard, writes GUARD_ADDRESS, moves funds into the guard
-pnpm ledger:anchor     # optional: attests the ledger head on EAS (--dry-run to simulate)
+pnpm setup-wallets     # fresh unfunded checkout: creates keys; no broadcast
 pnpm dev               # http://127.0.0.1:3000
 ```
+
+This starts EOA mode using your own new keys. Zero balances and empty private history are expected. On an existing funded installation, `setup-wallets` may attempt its two evidence writes, so it is not a read-only health command.
+
+To reproduce live guard execution, stop the dashboard and fund the printed agent address on Base Sepolia. The following example moves 0.015 ETH into a new guard; leave additional ETH on the agent EOA for deployment and subsequent gas. USDC is optional unless demonstrating a USDC payment. The default `--eth` amount of 0.002 may be insufficient for autonomous transfers under the documented runway floor.
+
+```powershell
+pnpm guard:compile
+pnpm guard:deploy --eth 0.015
+pnpm dev
+```
+
+Restart the server after `.env.local` changes. A fresh installation must deploy its own guard, not reuse the public evidence instance with unrelated keys. Tests can use the committed contract artifact without deploying. `ledger:anchor` is an optional broadcast, not a setup requirement; `--dry-run` simulates and records a dry-run entry.
 
 - **`pnpm setup-wallets`**
   - Generates `AGENT_PRIVATE_KEY` if it is missing.

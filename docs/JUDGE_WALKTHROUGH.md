@@ -1,38 +1,58 @@
 # Judge walkthrough and evidence handoff
 
-The strongest demonstration is a useful financial goal followed by proof of its boundaries. Do not substitute a claimed score for observable behavior. Task completion is 40%, security/compliance 30%, innovation/interaction 30%; on-chain exploration can earn up to five bonus points.
+Start with the [submission folder](https://drive.google.com/drive/folders/1Cw41nMcZb73bek-7lEANnuIzOpuMheBS?usp=sharing): presentation, product video, documentation PDFs, signed evidence JSON and verifier report. This repository is the source-code deliverable. The upload's artifact numbering differs from the competition numbering; use the file titles.
 
-## Before the session
+## Review without funding a wallet
 
-1. Run `pnpm test`, `pnpm typecheck`, `pnpm build` and `pnpm godui:check`.
-2. Start a single dashboard process. Keep operator scripts idle while the dashboard is active: JSON ledger locking is process-local.
-3. Open Judge proof. Review each non-ready item. Provider keys, funding, guard configuration/expiry and the active policy are operator prerequisites, not features the checklist fixes automatically.
-4. Keep your real evidence JSON and its expected signer beside `docs/06_EXECUTION_EVIDENCE.md`. The private ledger is intentionally absent from Git. A friend's documented receipts may come from a different ledger; request that matching export instead of combining or inventing history.
-5. Have the full ledger matching a previously published EAS checkpoint if demonstrating anchored prefix coverage. An account-only export cannot prove completeness. Never treat a transaction hash as an attestation UID.
-6. Record or present only the exact submitted commit. The presentation deck and optional video remain separate submission artifacts; this walkthrough is not the deck or a video.
+1. Watch the product recording, then compare the proposal, policy decision, simulation, human approval and returned receipt. A recorded run is historical; current balances and session state can differ.
+2. Read [01: architecture and execution algorithm](01_TECHNICAL_DOCUMENTATION.md), then [05: permission tiers and known risks](05_SECURITY_SELF_ASSESSMENT.md). The model proposes; code authorizes; AgentGuard limits delegated signing authority.
+3. Open the [reverted direct-key attack](https://sepolia.basescan.org/tx/0xaea1b30e3af54cfc5a7ff85ae1d687a16d94c7692990f8004b3f47e9a7ad6122) and [owner-approved payment](https://sepolia.basescan.org/tx/0x0f8d7803692337695608ca8fb853d6b329ade3e66c6d4eb32b6a7c85e381b2fd). [06](06_EXECUTION_EVIDENCE.md) describes their exact roles and the other historical receipts.
+4. Follow [the unfunded setup](SETUP.md#2-start-without-funding-or-an-llm) to explore the console, or run `pnpm test`, `pnpm typecheck` and `pnpm build` without keys. The test suite includes an in-process EVM; it does not claim live-chain execution.
+5. Independently verify the submitted export as described next. Neither verification path needs a browser wallet, private key, funding or LLM provider.
 
-## Six-minute operator demonstration
+## Verify the submitted export
 
-| Time      | Action                                                                                                                                              | What a judge can verify                                                                                                                                             |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0:00–0:40 | Open Judge proof and explain guard mode, planner configuration and the live gas reserve.                                                            | Actual prerequisites and limitations are visible. No fabricated balance or provider-health claim.                                                                   |
-| 0:40–1:20 | Inspect the portfolio in Intent Studio.                                                                                                             | Read-only Tier 0 plus actual tool progress.                                                                                                                         |
-| 1:20–2:20 | Treasury mandates: set a maximum and gas reserve, preview the sweep, inspect the limiting constraint. Execute only after reviewing the real amount. | Integer reserve/budget/runway calculation; vault destination; normal policy gate and real receipt or honest hold/block. A zero-surplus result is valid.             |
-| 2:20–3:10 | Pay an invoice from the inbox; compare a registered vendor with a changed-address invoice.                                                          | Model extraction is constrained by source text; vendor mismatch is a final hard block. No model or invoice can rewrite the vendor book.                             |
-| 3:10–3:50 | Review a pending Tier 2 payment. Inspect full recipient and current policy, then approve with the demo PIN only if the transaction is intended.     | Human step-up, new simulation and in guard mode an owner authorization verified by the contract. Use an already published real receipt if the wallet is not funded. |
-| 3:50–4:30 | Policy what-if lab: compare a small real transfer under current versus hypothetical limits.                                                         | Explainable tier changes without saving settings or signing. Hard blocks and contract limits survive a looser cap.                                                  |
-| 4:30–5:00 | Show local Pause, describe its PIN requirement and contrast its scope with owner on-chain revocation. Do not toggle it just for visual effect.      | Local control is clearly distinguished from the documented on-chain reverted attack and revocation receipts.                                                        |
-| 5:00–6:00 | Import evidence in Judge proof. Confirm expected signer, verify receipts and optionally the matching full-ledger EAS UID, then export the report.   | Seals, receipts, incomplete exports, prefix coverage and unanchored tails are distinguished. Open a returned BaseScan link.                                         |
+Download `04_Execution_Evidence.json` from the submission folder into a local `deliverables/` directory. If the downloaded filename or directory differs, pass that actual path instead.
 
-## Evidence rules
+```powershell
+pnpm verify:evidence "deliverables/04_Execution_Evidence.json" --signer 0xE1f4D11f3170Bd994379eA5f7443d826BC3ABd9F --guard 0xe05aec8cd8cd122f0988ba835670f64171453a31
+```
 
-- Never turn test output into on-chain evidence. All automated fixtures are synthetic and marked as such.
-- A successful offline seal check is not a successful receipt check.
-- A signed account export can omit entries. A full ledger can still lose its tail unless checked against a trusted checkpoint.
-- An EAS checkpoint proves the selected prefix; newer history is unanchored. The signer may create another checkpoint, so publish the UID independently.
-- Every pending or unknown broadcast remains reserved. Check BaseScan manually; do not replay it to get a cleaner demo.
-- The public demo PIN and environment-isolated keys are prototype controls. The owner key is not a hardware wallet, and this is not production custody.
+The expected signer and guard above come from the published project record, rather than the imported file. The command reads Base Sepolia RPC and never signs or writes state. The CLI does not auto-load `.env.local`; set `BASE_SEPOLIA_RPC_URL` in the shell if the public default is unavailable.
 
-## How the additions strengthen the rubric
+For seals only, add `--offline`. Offline verification cannot establish receipt status. Alternatively, open **Judge proof**, import the JSON, confirm the expected signer and guard, enable receipt checks, and download the report. Browser imports are limited to 2 MB, 1,000 entries and 50 distinct online transactions; use the CLI for larger files.
 
-Task completion gains a reserve-aware treasury goal that uses available assets. Security gains revalidated single-use previews, PIN-protected local interruption and an independent evidence/checkpoint checker. Interaction gains transparent what-if policy comparisons, a live readiness view and reviewer exports. Existing invoice verification, contract enforcement, attack evidence and bounded LLM planning remain central. Winning still depends on the final presentation, a funded/configured demo and evidence that matches the submitted run.
+### Keep the two evidence scopes separate
+
+| Dataset                                               | Recorded verification                                                       | Meaning / limitation                                                                                                                                                                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Historical operator run in `06_EXECUTION_EVIDENCE.md` | 47 entries, 47 signatures, 15/15 receipts                                   | Documents deployment, direct-key revert, Tier 1, Tier 2, owner revocation/renewal and EAS. Its EAS checkpoint covers only the first 33 sealed entries. Reproducing that ledger result needs its matching full ledger.     |
+| Submitted master-account export                       | 88 entries, 88 valid signatures, 8/8 unique receipts; 4 account-filter gaps | A separate account-filtered export. Gaps omit other-account entries; this is not a complete-history claim. The package's verifier report records the exact result. No matching EAS checkpoint is claimed for this export. |
+
+Different counts reflect different recordings, not interchangeable evidence. A hash may appear in multiple status entries; receipt counts are unique transactions. Never merge runs, silently fill gaps or use an account export to claim full-ledger EAS coverage. For an EAS check, supply the matching full ledger and the attestation **UID**, not the transaction hash. A matching checkpoint proves the selected prefix; newer entries remain unanchored.
+
+## Optional live operator demonstration
+
+Only run this sequence with your own funded/configured wallet. Follow [the guard setup](SETUP.md#4-fund-your-own-base-sepolia-guard-demo), review readiness in Judge proof, and confirm current budgets, runway and session expiry first. The public historical guard is not a shared judge sandbox.
+
+| Time      | Action                                                                          | Observable result                                                                               |
+| --------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 0:00–0:40 | Open Judge proof and explain custody mode, provider configuration and agent gas | Real prerequisites; configured model names do not establish provider health                     |
+| 0:40–1:20 | Inspect the portfolio in Intent Studio                                          | Tier 0 reads, no signing                                                                        |
+| 1:20–2:20 | Preview a treasury mandate; inspect the limiting constraint before executing    | Available-asset selection, gas reserve, budget and runway; a zero-surplus result is valid       |
+| 2:20–3:10 | Compare a registered-vendor invoice with a changed-address invoice              | Source-grounded extraction and a final vendor/payee mismatch block                              |
+| 3:10–3:50 | Review a real held Tier 2 proposal, then approve only if intended               | Fresh PIN, new simulation/policy check and, in guard mode, owner authorization checked on-chain |
+| 3:50–4:30 | Compare current and hypothetical policy in the what-if lab                      | Explainable changes without saving limits or signing                                            |
+| 4:30–5:00 | Explain local pause versus owner on-chain revocation                            | Application interruption and contract revocation have different scopes                          |
+| 5:00–6:00 | Verify the export and open its returned BaseScan links                          | Seals, receipts, account-filter gaps and prefix coverage are distinguished                      |
+
+Use the shorter [recording script](DEMO_SCRIPT.md) for a video of at most five minutes. Do not reproduce the six-minute live walkthrough as the video.
+
+## Boundaries worth checking
+
+- Blacklist, failed simulation, wrong chain, gas ceiling, local pause and vendor mismatch are final hard blocks. Approval re-runs checks; it cannot override them.
+- The model cannot sign, approve, replace the stored original prompt, run arbitrary contract calls, or perform swaps/yield/bridging.
+- A reserved or unknown broadcast must be reconciled, not retried to obtain a cleaner demo.
+- The six-digit public demo PIN and environment-held owner key are prototype controls. There is no HSM, independent owner device or production tenant isolation.
+- EOA-mode accounts have no contract guard. Guard mode still leaves the agent's gas EOA exposed to its key holder.
+- No local ledger or account secrets are committed. An unfunded checkout has no invented balances, hashes or history.
