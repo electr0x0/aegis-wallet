@@ -85,13 +85,13 @@ The router applies these rules in order. The first match wins.
 
 1. **Injection language with an address.** The prompt matches the shared adversarial pattern (`ignore all|previous`, `override`, `system prompt`, `developer mode`, `drain wallet`) and contains a full address. The router sends a transfer proposal to the policy engine with the amount stated in the prompt, or `0` if there is none, so that the block is evaluated and recorded. The policy engine blocks it unless the recipient is whitelisted. A whitelisted recipient still goes through the normal tiers. Nothing is invented: a missing amount stays `0`, which is always blocked.
 2. **Injection language asking for the whole balance, with no address.** Refused with an error. Nothing is signed.
-3. **Swap, yield, staking or bridging wording.** Refused before any parsing. So is a USDC–ETH conversion worded without "swap" ("convert my USDC to ETH", "sell USDC for ETH"); ETH to WETH stays a 1:1 wrap. Neither the deterministic parser nor the planner can reinterpret such a request as a transfer.
+3. **Swap, yield, staking or bridging wording.** Refused before any parsing. So is a USDC–ETH conversion worded without "swap" ("convert my USDC to ETH", "sell USDC for ETH", "send 1 USDC to ETH"); ETH to WETH stays a 1:1 wrap. Neither the deterministic parser nor the planner can reinterpret such a request as a transfer.
 4. **A pasted invoice.** The text contains "invoice" (or 发票) and at least one labelled field such as `From:`, `Total due:` or `Pay to:`. It goes to the invoice reader (section 3.4). Rule 1 runs first, so an invoice that carries instructions for the agent is blocked before any model reads it.
 5. **One amount and token, with no multi-step wording.** Handled by the deterministic parser:
    - The amount must be the only number-and-unit in the prompt and written plainly (`1,5 USDC`, `.5 ETH` and `1e3 USDC` do not count), and the verb must not be negated (`don't send`). Otherwise the prompt falls through.
    - `unwrap` requires a WETH amount and produces `unwrap_weth`.
    - `wrap` or `rebalance` requires an ETH amount and produces `wrap_eth`.
-   - `send`, `transfer` or `pay` produces `transfer_token` to the address in the prompt, or to `VAULT_ADDRESS` when no address is given.
+   - `send`, `transfer` or `pay` produces `transfer_token` to the address in the prompt, or to `VAULT_ADDRESS` when the prompt names the vault. With neither, it is refused and asks for a recipient; the vault is never a silent default.
    - Any other verb falls through, so no transfer is ever inferred.
    - `simulate` or `dry run` in the prompt makes the call a dry run.
 6. **`portfolio`, `balance` or `gas`.** A Tier 0 portfolio read.

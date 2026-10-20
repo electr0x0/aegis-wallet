@@ -1486,6 +1486,8 @@ describe("Router regressions found by the attack suite", () => {
       "Exchange 5 USDC into WETH",
       "Sell my USDC for ETH",
       "Buy ETH with my USDC",
+      "send 1 usdc to eth",
+      "Transfer 2 USDC into WETH",
     ];
     for (const prompt of prompts) {
       resetCase();
@@ -1493,6 +1495,18 @@ describe("Router regressions found by the attack suite", () => {
       const reply = await viaRouter(prompt);
       expect(reply.error).toMatch(/not supported/);
       expect(mocks.plannerRequests).toEqual([]);
+    }
+  });
+
+  it("never defaults a transfer to the vault unless the prompt names it", async () => {
+    const prompts = ["Send 1 USDC to bob", "Pay 2 USDC"];
+    for (const prompt of prompts) {
+      resetCase();
+      mocks.model = stubPlanner();
+      const reply = await viaRouter(prompt);
+      expect(reply.error).toMatch(/recipient/);
+      expect(mocks.sent).toEqual([]);
+      expect(ledgerNow().pending).toEqual([]);
     }
   });
 

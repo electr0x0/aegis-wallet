@@ -57,6 +57,8 @@ const TRANSFER_VERB = /\b(?:send|transfer|pay)/i;
 const UNSUPPORTED = /\b(?:swap|yield|stak|bridg)/i;
 // A swap worded without "swap": "convert my USDC to ETH". ETH to WETH is a 1:1 wrap and passes.
 const CONVERSION_VERB = /\b(?:convert|exchange|trade|sell|buy)\b/i;
+// "Send 1 USDC to ETH" names a token, not a recipient: it is a conversion too.
+const TOKEN_DESTINATION = /\b(?:to|into)\s+(?:usdc|w?eth)\b/i;
 const USDC_AND_ETH = /\busdc\b[\s\S]*\bw?eth\b|\bw?eth\b[\s\S]*\busdc\b/i;
 const UNSUPPORTED_MESSAGE =
   "Swaps and yield deposits are not supported: no slippage-safe route exists on this testnet deployment.";
@@ -180,7 +182,9 @@ function asksForSecret(prompt: string): boolean {
 }
 
 function asksForConversion(prompt: string): boolean {
-  return CONVERSION_VERB.test(prompt) && USDC_AND_ETH.test(prompt);
+  const conversionWording =
+    CONVERSION_VERB.test(prompt) || TOKEN_DESTINATION.test(prompt);
+  return conversionWording && USDC_AND_ETH.test(prompt);
 }
 
 // Deterministic demo parser. Returns null when the prompt is not a single wrap or transfer.
@@ -201,10 +205,13 @@ function parseSingleAction(
   }
   // Only an explicit send/transfer/pay verb may move funds to another address.
   if (!TRANSFER_VERB.test(prompt)) return null;
-  const recipient = address || process.env.VAULT_ADDRESS;
+  // The vault is used only when the prompt names it: "send 1 USDC to bob" is never
+  // quietly redirected there.
+  const vault = /\bvault\b/i.test(prompt) ? process.env.VAULT_ADDRESS : "";
+  const recipient = address || vault;
   if (!recipient) {
     throw new Error(
-      "Configure VAULT_ADDRESS or provide a complete recipient address",
+      'Name the recipient: give a full 0x address, or say "to the vault". Nothing was signed.',
     );
   }
   return { ...base, kind: "transfer_token", recipient };
