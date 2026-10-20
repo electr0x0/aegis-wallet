@@ -41,7 +41,7 @@ Finance teams still key invoices into payments by hand, and the costliest paymen
 3. **The policy verifies the payee.** The vendor book in the policy maps each vendor to one address. An instruction that names a vendor but pays any other address is blocked, and approval cannot override it. This is the same check EU banks have had to offer since 9 October 2025 (Regulation (EU) 2024/886). The reply marks every character that differs from the registered address, so an address-poisoning lookalike is obvious at a glance.
 4. **A human approves.** A verified vendor that is not whitelisted is a Tier 2 payment: the agent prepares it and a person signs it off (maker-checker). In guard mode, AgentGuard verifies the owner signature on-chain.
 
-An invoice that carries instructions for the agent ("ignore previous instructions…") is blocked before any model reads it. Details: [docs/01, section 3.4](docs/01_TECHNICAL_DOCUMENTATION.md#34-invoice-payments-and-verification-of-payee); risks R23 and R24 in [docs/05](docs/05_SECURITY_SELF_ASSESSMENT.md#3-known-risk-list).
+An invoice that carries instructions for the agent ("ignore previous instructions…") is blocked before any model reads it. Details: [docs/01, section 12](docs/01_TECHNICAL_DOCUMENTATION.md#12-invoice-reading-and-verification-of-payee); risks R23 and R24 in [docs/05](docs/05_SECURITY_SELF_ASSESSMENT.md#3-known-risk-list).
 
 The ledger head (last entry hash, entry count, policy hash) can be anchored on EAS by the operator. This is a fixed, zero-value call sent from the agent EOA through `executeAction`; it is never a planner tool.
 
